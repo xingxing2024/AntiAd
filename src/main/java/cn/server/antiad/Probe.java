@@ -99,30 +99,32 @@ public final class Probe {
     /** 真正的探测逻辑（包内可见，方便对着真实服务器做一次性自检，也方便单测）。 */
     Result investigate(String host, int port, int timeoutMs, boolean fetchTitle) {
         long deadline = System.currentTimeMillis() + Math.max(200, timeoutMs);
-        if (!allowPrivate && !publicHost(host)) return Result.NONE;
+
+        // 先查 SRV：SRV-only 的域名（例如 play.example.cn）本身往往没有 A 记录，
+        // 要是先做公网校验就会直接判成"域名解析不了"，SRV 等于白查。
+        Srv srv = srv(host, deadline);
+        boolean explicitPort = port != 25565;   // 玩家自己写了端口：客户端会直接用这个端口，不看 SRV
+        String pingHost = srv == null || explicitPort ? host : srv.target();
+        int pingPort = srv == null || explicitPort ? port : srv.port();
+        // 公网校验放在真正要连的目标上（SRV 指向的主机，或者域名本身）。
+        if (!allowPrivate && !publicHost(pingHost)) return Result.NONE;
 
         StringBuilder notes = new StringBuilder();
         boolean minecraft = false;
         boolean portOpen = false;
-        int pingPort = port;
-        String pingHost = host;
+        if (srv != null) {
+            // _minecraft._tcp 记录只有 MC 客户端会查，存在基本就等于「这里开着 MC 服」。
+            minecraft = true;
+            notes.append("SRV _minecraft._tcp → ").append(srv.target()).append(':').append(srv.port());
+            if (explicitPort) notes.append("（消息里写了端口 ").append(port).append("，按它连）");
+            notes.append("；");
+        } else if (port == 25565) {
+            notes.append("没有 _minecraft._tcp SRV 记录；");
+        }
 
         // 网页标题和协议探测并行跑：地址是网站时 SLP 会一直等到超时，串行加起来太慢。
         // shortcut: 每条未缓存的探测多开一个线程（有 10 分钟缓存、探测频率低，不值得为它再建线程池）。
         CompletableFuture<String> titleTask = fetchTitle ? CompletableFuture.supplyAsync(() -> title(host, deadline)) : null;
-
-        Srv srv = srv(host, deadline);
-        if (srv != null) {
-            // _minecraft._tcp 记录只有 MC 客户端会查，存在基本就等于「这里开着 MC 服」。
-            minecraft = true;
-            // 玩家自己写了端口时，客户端会直接用那个端口连（不看 SRV），所以按消息里的端口探。
-            boolean explicitPort = port != 25565;
-            pingHost = explicitPort ? host : srv.target();
-            pingPort = explicitPort ? port : srv.port();
-            notes.append("SRV _minecraft._tcp → ").append(srv.target()).append(':').append(srv.port());
-            if (explicitPort) notes.append("（消息里写了端口 ").append(port).append("，按它连）");
-            notes.append("；");
-        }
 
         Status status = status(pingHost, pingPort, deadline);
         if (status != null && status.portOpen() && status.version().isEmpty() && status.max() == 0 && status.motd().isEmpty()) {
