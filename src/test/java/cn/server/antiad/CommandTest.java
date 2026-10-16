@@ -3,6 +3,8 @@ package cn.server.antiad;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommandTest {
     @Test void 时长解析() {
@@ -32,6 +34,27 @@ class CommandTest {
         assertEquals("reload", AntiAdCommand.canonical("rl"));
         assertEquals("help", AntiAdCommand.canonical("?"));
         assertEquals("nonsense", AntiAdCommand.canonical("nonsense"));
+    }
+
+    @Test void 是否计入封禁次数由探测结论决定() {
+        Settings settings = new Settings();
+        Probe.Result live = new Probe.Result(true, true, "25565 端口回应了 Minecraft 状态");
+        Probe.Result dead = new Probe.Result(true, false, "25565 端口无响应；首页标题：某网站（不像服务器站点）");
+        Probe.Result none = Probe.Result.NONE;
+
+        settings.probeEnabled = true;
+        settings.probeConfirmRequired = true;
+        assertTrue(ChatGuard.hardHit(settings, live), "确认是活的服务器 → 计入");
+        assertFalse(ChatGuard.hardHit(settings, dead), "探测到不是服务器 → 不计入（不封号）");
+        assertFalse(ChatGuard.hardHit(settings, none), "域名解析不了 → 不计入");
+
+        settings.probeConfirmRequired = false;   // 关掉确认要求 = 老行为
+        assertTrue(ChatGuard.hardHit(settings, dead));
+        assertTrue(ChatGuard.hardHit(settings, none));
+
+        settings.probeConfirmRequired = true;
+        settings.probeEnabled = false;           // 整个探测关掉 = 老行为
+        assertTrue(ChatGuard.hardHit(settings, none));
     }
 
     @Test void 规范子命令名不会被短写改写() {

@@ -127,10 +127,12 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
         plugin.runAsync(() -> {
             for (String host : hosts) {
                 Probe.Result result = probes.lookup(host, Probe.portOf(normalized, host), settings);
+                boolean hard = ChatGuard.hardHit(settings, result);
                 String line = result.probed()
                         ? "&7地址情报（&f" + host + "&7）：&f" + result.text()
-                        : "&7地址情报（&f" + host + "&7）：&8没有结论（内网地址或探测失败）";
-                plugin.runGlobal(() -> sender.sendMessage(Messages.text(line)));
+                        : "&7地址情报（&f" + host + "&7）：&8没有结论（域名解析不了、内网地址或探测失败）";
+                String message = line + (hard ? " &7→ &c会计入封禁次数" : " &7→ &a只隐藏、不计入封禁次数（不会累计到封号）");
+                plugin.runGlobal(() -> sender.sendMessage(Messages.text(message)));
             }
         });
     }
@@ -455,7 +457,11 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
                 case "book" -> "&e书";
                 default -> "&c封禁";
             };
-            String action = "banned".equals(hit.action()) ? "&c已封禁" : "&7已隐藏";
+            String action = switch (hit.action() == null ? "" : hit.action()) {
+                case "banned" -> "&c已封禁";
+                case "soft" -> "&7只隐藏&8（没探测到服务器）";
+                default -> "&7已隐藏";
+            };
             sender.sendMessage(Messages.text("&7" + TIME.format(Instant.ofEpochMilli(hit.hit())) + " " + kind + " &f" + hit.player()
                     + " &7" + (hit.ip() == null ? "" : hit.ip()) + " " + action
                     + (hit.match() == null ? "" : " &7命中 &f" + hit.match())

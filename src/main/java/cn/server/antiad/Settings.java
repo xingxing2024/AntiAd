@@ -13,7 +13,7 @@ public final class Settings {
     public boolean checkChat, storageEnabled, checkNumericIp, aiEnabled, aiFailOpen, aiRefire, behaviorEnabled;
     public boolean banByCommand;
     public boolean structureEnabled, checkSigns, checkAnvil, checkBooks;
-    public boolean probeEnabled, probeFetchTitle;
+    public boolean probeEnabled, probeFetchTitle, probeConfirmRequired;
     public int hits, windowSeconds, newPlayerMinutes, keepDays, aiTimeout, aiContext, aiConcurrent;
     public int probeTimeoutMs, probeCacheSeconds;
     public int normalScore, suspiciousScore, advertiserScore, defaultScore, blocksPerPoint, commandsPerPoint, maxActivityScore, adHitPenalty, wordHitPenalty;
@@ -110,6 +110,8 @@ public final class Settings {
         s.probeTimeoutMs = Math.max(200, c.getInt("probe.timeout-ms", 2000));
         s.probeCacheSeconds = Math.max(0, c.getInt("probe.cache-seconds", 600));
         s.probeFetchTitle = c.getBoolean("probe.fetch-title", true);
+        // 地址命中是否必须探测确认是活的 MC 服务器才计入封禁次数（默认 true：防止随手打一个不存在的网址被累计封号）。
+        s.probeConfirmRequired = c.getBoolean("probe.confirm-required", true);
         s.aiPrompt = c.getString("ai.prompt", DEFAULT_AI_PROMPT);
         // AI 预筛：关键词表为空 = 所有带文字的消息都送 AI；不写这一项 = 用内置关键词表，只送像广告的。
         if (c.isSet("ai.trigger-words")) {
