@@ -1,6 +1,6 @@
 # AntiAd
 
-针对 Purpur / Paper / Folia 26.2+（已在 Purpur 26.3 / Java 25 实测）的聊天与行为管制插件（反服务器广告）。
+支持 **Paper / Purpur / Folia 1.21.1 ~ 26.x** 的聊天与行为管制插件（反服务器广告）：一份 jar 通吃，Java 21 或更新即可（已在 Java 21 + Purpur 1.21.1、Java 25 + Purpur 26.3 实测）。
 
 > **完整手册见 [`wiki/`](wiki/Home.md)**（同一份内容也发布在 [GitHub Wiki](https://github.com/xingxing2024/AntiAd/wiki)）：安装与升级、[配置详解](wiki/配置详解.md)、[判定流程](wiki/判定流程.md)、[行为分类与老玩家](wiki/行为分类与老玩家.md)、[AI 审核](wiki/AI审核.md)、[命令与权限](wiki/命令与权限.md)、[记录与查询](wiki/记录与查询.md)、[兼容与 Folia](wiki/兼容与Folia.md)、[常见问题](wiki/常见问题.md)、[开发与发布](wiki/开发与发布.md)。
 > 这份 README 是快速上手；`FEATURES.md` 是功能清单；`wiki/` 是逐项说明。
@@ -132,14 +132,14 @@
 
 ## 安装
 
-1. 服务器 Java 25。
-2. 把 `target/AntiAd-1.0.3.jar`（约 110 KB）放进 `plugins`。
+1. 服务器 Java **21 或更新**（1.21.x 服务端用 Java 21，26.x 用 Java 25 —— 插件按 Java 21 编译，两边都能跑）。
+2. 把 `target/AntiAd-1.0.4.jar`（约 110 KB）放进 `plugins`。
 3. 首次启动会自动从**阿里云镜像**下载 SQLite 驱动到服务端根目录的 `libraries/org/xerial/sqlite-jdbc/`（想换源：启动参数 `-Dorg.bukkit.plugin.java.LibraryLoader.centralURL=<仓库>`；**无外网**就手动下 `https://maven.aliyun.com/repository/public/org/xerial/sqlite-jdbc/3.51.0.0/sqlite-jdbc-3.51.0.0.jar` 放进那个目录）。
 4. 启动一次后编辑 `plugins/AntiAd/config.yml`（把 `whitelist.domains` / `whitelist.ips` 改成自己服务器的域名、入口 IP、自己的 QQ 群号，`punish.contact` 改成你的解封联系方式，要用 AI 再填 `ai.api-key`），然后 `/antiad reload`。
 
 ## 构建与测试
 
-`mvn package`（用 Purpur 26.2 API 构建，可直接跑在 26.2 及更新版本）。**支持 Paper / Purpur / Folia**（`folia-supported: true`，全部改用区域化调度，Paper 上自动落到主线程）。`mvn test` 覆盖检测器（命中、归一化、白名单、受信任平台、误伤用例、违禁词、数字 IP、内置后缀、跨消息拼接、结构调整）、行为分类与老玩家判定、计数、SQLite（含重启恢复）、地址情报探测（本机假 MC 服务器验协议、假 HTTP 服务器验标题、缓存与私网拦截）、AI 客户端（本地假接口验证请求体、解析、超时与 fail-open）。
+`mvn package`（**对着 Paper 1.21.1 API 构建、编译目标 Java 21**，所以一份 jar 能跑在 1.21.1 ~ 26.x）。**支持 Paper / Purpur / Folia**（`folia-supported: true`，全部改用区域化调度，Paper 上自动落到主线程）。`mvn test` 覆盖检测器（命中、归一化、白名单、受信任平台、误伤用例、违禁词、数字 IP、内置后缀、跨消息拼接、结构调整）、行为分类与老玩家判定、计数、SQLite（含重启恢复）、地址情报探测（本机假 MC 服务器验协议、假 HTTP 服务器验标题、缓存与私网拦截）、AI 客户端（本地假接口验证请求体、解析、超时与 fail-open）。
 
 ## 已知限制
 

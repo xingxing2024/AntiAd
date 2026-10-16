@@ -1,6 +1,6 @@
-﻿# AntiAd Wiki
+# AntiAd Wiki
 
-针对 **Paper / Purpur / Folia 26.2+** 的服务器广告与违规内容管制插件。核心思路：**只管受管制的玩家**，命中不删消息、只让发送者自己看见，管理员能查、能复盘、能封。
+针对 **Paper / Purpur / Folia 1.21.1 ~ 26.x** 的服务器广告与违规内容管制插件（一份 jar，Java 21+）。核心思路：**只管受管制的玩家**，命中不删消息、只让发送者自己看见，管理员能查、能复盘、能封。
 
 ## 目录
 
@@ -39,8 +39,8 @@
 
 ## 版本与依赖
 
-- 服务端：Paper / Purpur / Folia 26.2+（`api-version: 26.2`、`folia-supported: true`），实测 Purpur 26.3-2642 与 Folia 26.2-7。
-- Java：25（编译目标 25）。
+- 服务端：Paper / Purpur / Folia **1.21.1 ~ 26.x**（一份 jar；`api-version: 1.21`、`folia-supported: true`）。实测：Java 21 + Purpur 1.21.1、Java 25 + Purpur 26.3、Folia 26.2-7。
+- Java：**21 或更新**（编译目标 Java 21，所以 1.21.x 服常见的 Java 21 也能跑）。
 - 数据库：SQLite（驱动 `sqlite-jdbc` 由插件自带的 Paper 加载器从**阿里云镜像**下载，Apache-2.0）。
 - 统计：内置 bStats（插件 ID 34706，可全局关闭）。
 - 不依赖 Vault / PlaceholderAPI / ProtocolLib。
