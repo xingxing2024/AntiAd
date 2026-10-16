@@ -90,13 +90,13 @@
 
 - 本项目为**原创实现**，未复制任何其他插件的代码；文档中提到的 TrChat、fakeplayer、Vault、PlaceholderAPI、ProtocolLib、bStats 等仅为兼容性说明或测试环境，与本项目无隶属或衍生关系。
 - 第三方依赖（随包分发，遵循各自许可）：
-  - [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)（org.xerial，Apache-2.0）
   - [bStats](https://bstats.org)（org.bstats，MIT，已重定位到 `cn.server.antiad.bstats`）
+- 运行时依赖：SQLite 驱动 [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)（org.xerial，Apache-2.0）**不打进 jar**，由服务端按 `plugin.yml` 里的 `libraries` 在首次启动时自动下载（详见 [安装](wiki/安装与升级.md)）。
 - 内置数据：`tlds.txt` 取自已公开的 IANA 根区后缀（另做了筛选），`trusted-domains.txt` 为自行整理。
 
 ## 记录
 
-命中记录写入 SQLite：`plugins/AntiAd/<storage.file>`（默认 `antiad.db`），包含时间、玩家、IP、类型（广告 / AI / 违禁词 / 封禁）、命中内容与整条消息。重启后 60 秒窗口内的累计次数从这里恢复，不会因重启清零；保留 `storage.keep-days` 天（默认 30，0 = 永久）。
+命中记录写入 SQLite：`plugins/AntiAd/antiad.db`，包含时间、玩家、IP、类型（广告 / AI / 违禁词 / 封禁）、命中内容与整条消息。重启后 60 秒窗口内的累计次数从这里恢复，不会因重启清零；保留 `storage.keep-days` 天（默认 30，0 = 永久）。
 
 同一张库里还按天累计 AI 用量（调用次数、输入/输出 tokens），`/antiad cost` 按 `ai.price` 的单价估算费用。单价要按你实际用的服务改：DeepSeek `deepseek-chat` 常见档位是输入 2 / 输出 8（元每百万 tokens），智谱 GLM-4-Flash 免费可填 0。命中记录与用量都会被 `keep-days` 一起清理。
 
@@ -111,7 +111,7 @@
 - `/antiad cost` —— 每日 AI 调用次数、输入/输出 tokens 与估算费用（近 7 天逐日 + 近 30 天 + 建库以来累计）
 - `/antiad records [玩家]` —— 查看最近 10 条命中记录（含隐藏的原文与 AI 判定理由）
 - `/antiad test <文本>` —— 只试跑规则检测（归一化、广告命中、违禁词命中），不处理、不记录、不调 AI
-- `/antiad reload` —— 重载配置（记录库换文件需重启）
+- `/antiad reload` —— 重载配置（`ai.max-concurrent` 需重启）
 - `/antiad help`
 
 解封：`/pardon-ip <地址>` + `/pardon <玩家名>`（封禁名单就是 `banned-ips.json` 与 `banned-players.json`）。
@@ -123,8 +123,9 @@
 ## 安装
 
 1. 服务器 Java 25。
-2. 把 `target/AntiAd-1.0.0.jar` 放进 `plugins`。
-3. 启动一次后编辑 `plugins/AntiAd/config.yml`（把 `whitelist.domains` / `whitelist.ips` 改成自己服务器的域名、入口 IP、自己的 QQ 群号，`punish.contact` 改成你的解封联系方式，要用 AI 再填 `ai.api-key`），然后 `/antiad reload`。
+2. 把 `target/AntiAd-1.0.1.jar`（约 110 KB）放进 `plugins`。
+3. 首次启动会自动下载 SQLite 驱动到服务端根目录的 `libraries/org/xerial/sqlite-jdbc/`（需要外网；**无外网**的话手动把 `sqlite-jdbc-3.51.0.0.jar` 放到那个目录里即可）。
+4. 启动一次后编辑 `plugins/AntiAd/config.yml`（把 `whitelist.domains` / `whitelist.ips` 改成自己服务器的域名、入口 IP、自己的 QQ 群号，`punish.contact` 改成你的解封联系方式，要用 AI 再填 `ai.api-key`），然后 `/antiad reload`。
 
 ## 构建与测试
 

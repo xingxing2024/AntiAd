@@ -2,7 +2,7 @@
 
 > 逐项说明与"怎么做"见 [`wiki/`](wiki/Home.md)；本文件是功能全表。
 
-Purpur / Paper 26.2+（实测 Purpur 26.3-2642 / Java 25）· 不依赖 Vault · 记录用自带 SQLite。
+Purpur / Paper 26.2+（实测 Purpur 26.3-2642 / Java 25）· 不依赖 Vault · 记录用 SQLite（驱动由服务端首次启动时自动下载，插件本体约 110 KB）。
 目标：**只管新玩家**的广告与违规内容，命中不删消息、只让发送者自己看见，管理员能查、能复盘、能封。
 
 ## 1. 检查范围
@@ -131,7 +131,7 @@ SQLite `plugins/AntiAd/antiad.db`：
 | `/antiad cost` | 每日调用次数 + 估算费用 |
 | `/antiad records [玩家]` | 最近 10 条命中记录（含原文与 AI 理由） |
 | `/antiad test <文本>` | 只试跑规则（归一化、地址命中、敏感词命中、是否会被预筛送 AI），不处理、不记录、不调 AI |
-| `/antiad reload` | 重载配置（记录库换文件、AI 并发数需重启） |
+| `/antiad reload` | 重载配置（`ai.max-concurrent` 需重启） |
 
 权限：`antiad.admin`（命令，默认 OP）、`antiad.notify`（接收通报，默认 OP）、`antiad.bypass`（跳过检查，默认 OP）。
 
@@ -141,7 +141,7 @@ SQLite `plugins/AntiAd/antiad.db`：
 - 线程模型：聊天事件是异步的，处理器只读内存缓存（老玩家判定所需的在线时长/违规次数每分钟在玩家线程上刷新）；所有对玩家的动作（补发消息、踢出、封禁、通报）都通过 `EntityScheduler` 在该玩家所属区域线程执行；SQLite 写入用同步方法保护。
 - 同时兼容装了 **TrChat** 这类接管聊天的插件（实测 A/B：旧实现会被 TrChat 绕过，新实现 0 次广播）。
 - 记录库需要写 `plugins/AntiAd/`；AI 需要出网（本地 Ollama 可离线）。
-- 无 Vault、无 PlaceholderAPI、无 ProtocolLib 依赖；jar 自带 sqlite 驱动与 bStats（已重定位到 `cn.server.antiad.bstats`，不会和其他插件冲突），约 12MB。
+- 无 Vault、无 PlaceholderAPI、无 ProtocolLib 依赖；jar 本体约 **110 KB**（只 shade 了 bStats，已重定位到 `cn.server.antiad.bstats`，不会和其他插件冲突）。SQLite 驱动按 `plugin.yml` 的 `libraries` 由服务端首次启动时下载到 `libraries/org/xerial/sqlite-jdbc/`（无外网时手动放进去）。
 - 匿名统计：bStats 插件 ID `34706`，只上报版本/服务端/Java/在线人数/地区这类信息，不含玩家名、IP、聊天内容；可在 `plugins/bStats/config.yml` 里 `enabled: false` 全局关闭。
 
 ## 10. 已知限制与未做项
@@ -156,7 +156,7 @@ SQLite `plugins/AntiAd/antiad.db`：
 
 ## 11. 验证情况
 
-- 41 个单元测试：检测规则、归一化、误伤用例、数字 IP、内置后缀、受信任平台、跨消息拼接（含连锁误伤回归）、结构调整、行为打分/分类/阈值、SQLite 三类表读写、AI 客户端（本地假接口验证请求体/解析/超时/fail-open）。
+- 44 个单元测试：检测规则、归一化、误伤用例、数字 IP、内置后缀、受信任平台、跨消息拼接（含连锁误伤回归）、结构调整、行为打分/分类/阈值、SQLite 三类表读写（含重启恢复），AI 客户端（本地假接口验证请求体/解析/超时/fail-open）。
 - 真机（Purpur 26.3 / Java 25，另加 TrChat 2.5.2 与 fakeplayer 0.4.5 做对照）：
   - 影子隐藏穿透 TrChat：旧版 3 次广播、新版 0 次（A/B 对照）。
   - 新玩家挖 53 格 → 行为分 21 → 观望，落库后 `/antiad behavior` 可见；老玩家 0 统计。
