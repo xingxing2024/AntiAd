@@ -1,0 +1,8 @@
+# 统一换行：仓库内一律 LF（Windows 检出也不再提示 CRLF 警告）
+* text=auto eol=lf
+# 二进制文件不做换行转换
+*.jar binary
+*.png binary
+*.jpg binary
+*.log binary
+*.db binary
