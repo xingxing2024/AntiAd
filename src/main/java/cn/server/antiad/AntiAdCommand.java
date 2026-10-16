@@ -338,9 +338,12 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
         long first = target.getFirstPlayed();
         long minutes = first <= 0 ? -1 : (System.currentTimeMillis() - first) / 60_000L;
         boolean bypass = !settings.bypassPermission.isEmpty() && online != null && online.hasPermission(settings.bypassPermission);
+        boolean whitelisted = settings.playerAllowed(id, target.getName());
 
         sender.sendMessage(Messages.text("&6" + target.getName() + " &7（" + (online != null ? "在线" : "离线") + "）"
                 + (minutes < 0 ? "&7从未进过服" : "&7进服已 &f" + minutes + " &7分钟")));
+        if (whitelisted) sender.sendMessage(Messages.text("&a玩家白名单：是 &7（whitelist.players 里写了这个名字/UUID，完全免检）"));
+        else if (bypass && online != null) sender.sendMessage(Messages.text("&a拥有绕过权限 &f" + settings.bypassPermission + "&7：完全免检"));
         if (settings.behaviorEnabled && online != null) {
             long ticks = online.getStatistic(Statistic.PLAY_ONE_MINUTE);
             int violations = online != null ? plugin.behavior().violations(id)
