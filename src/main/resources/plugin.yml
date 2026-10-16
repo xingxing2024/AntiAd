@@ -1,0 +1,22 @@
+name: AntiAd
+version: '${project.version}'
+main: cn.server.antiad.AntiAdPlugin
+api-version: '${bukkit.api.version}'
+folia-supported: true
+description: 广告与违规内容管制（行为分类 + 结构规则 + 可选 AI），支持 Folia 区域化调度
+author: ServerTools
+commands:
+  antiad:
+    description: 反广告插件管理命令
+    usage: /antiad reload|test <文本>
+    aliases: [adban]
+permissions:
+  antiad.admin:
+    description: 使用 /antiad 管理命令
+    default: op
+  antiad.notify:
+    description: 接收命中与封禁通报
+    default: op
+  antiad.bypass:
+    description: 跳过广告检查
+    default: op
