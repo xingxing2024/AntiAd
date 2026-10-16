@@ -124,6 +124,8 @@
 - `/antiad reload` —— 重载配置（`ai.max-concurrent` 需重启）
 - `/antiad help`
 
+**短写**：根命令也可以写成 `/ad`（或 `/adban`），子命令都有简写 —— `/ad c`=check、`b`=ban、`ub`=unban、`bh`=behavior、`a`=ai、`co`=cost、`r`=records、`t`=test、`rl`=reload、`h`（或 `?`）=help。例如 `/ad c Steve`、`/ad b Steve 2h 发广告`。
+
 解封：`/pardon-ip <地址>` + `/pardon <玩家名>`（封禁名单就是 `banned-ips.json` 与 `banned-players.json`）。
 
 ## 权限
@@ -133,7 +135,7 @@
 ## 安装
 
 1. 服务器 Java **21 或更新**（1.21.x 服务端用 Java 21，26.x 用 Java 25 —— 插件按 Java 21 编译，两边都能跑）。
-2. 把 `target/AntiAd-1.0.4.jar`（约 110 KB）放进 `plugins`。
+2. 把 `target/AntiAd-1.0.5.jar`（约 110 KB）放进 `plugins`。
 3. 首次启动会自动从**阿里云镜像**下载 SQLite 驱动到服务端根目录的 `libraries/org/xerial/sqlite-jdbc/`（想换源：启动参数 `-Dorg.bukkit.plugin.java.LibraryLoader.centralURL=<仓库>`；**无外网**就手动下 `https://maven.aliyun.com/repository/public/org/xerial/sqlite-jdbc/3.51.0.0/sqlite-jdbc-3.51.0.0.jar` 放进那个目录）。
 4. 启动一次后编辑 `plugins/AntiAd/config.yml`（把 `whitelist.domains` / `whitelist.ips` 改成自己服务器的域名、入口 IP、自己的 QQ 群号，`punish.contact` 改成你的解封联系方式，要用 AI 再填 `ai.api-key`），然后 `/antiad reload`。
 

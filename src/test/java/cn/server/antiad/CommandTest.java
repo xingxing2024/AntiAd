@@ -18,6 +18,28 @@ class CommandTest {
         assertEquals(-1, AntiAdCommand.seconds(""));
     }
 
+    @Test void 短写命令映射到规范子命令() {
+        assertEquals("check", AntiAdCommand.canonical("c"));
+        assertEquals("check", AntiAdCommand.canonical("INFO"));
+        assertEquals("ban", AntiAdCommand.canonical("b"));
+        assertEquals("unban", AntiAdCommand.canonical("ub"));
+        assertEquals("unban", AntiAdCommand.canonical("pardon"));
+        assertEquals("behavior", AntiAdCommand.canonical("bh"));
+        assertEquals("ai", AntiAdCommand.canonical("a"));
+        assertEquals("cost", AntiAdCommand.canonical("co"));
+        assertEquals("records", AntiAdCommand.canonical("r"));
+        assertEquals("records", AntiAdCommand.canonical("logs"));
+        assertEquals("reload", AntiAdCommand.canonical("rl"));
+        assertEquals("help", AntiAdCommand.canonical("?"));
+        assertEquals("nonsense", AntiAdCommand.canonical("nonsense"));
+    }
+
+    @Test void 规范子命令名不会被短写改写() {
+        for (String sub : java.util.List.of("check", "ban", "unban", "behavior", "ai", "cost", "records", "test", "reload", "help")) {
+            assertEquals(sub, AntiAdCommand.canonical(sub), "规范名 " + sub + " 被短写表改掉了");
+        }
+    }
+
     @Test void 外部封禁指令的占位符() {
         assertEquals("", Messages.durationText(0));
         assertEquals("45s", Messages.durationText(45));
