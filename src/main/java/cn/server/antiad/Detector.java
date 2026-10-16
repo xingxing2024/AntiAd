@@ -112,6 +112,24 @@ public final class Detector {
         return null;
     }
 
+    /** 消息里出现的所有域名与公网 IP，不限后缀、也不管白名单 —— 地址情报探测用（比 find 范围宽，白名单内的仍会排除）。 */
+    public static List<String> addresses(String raw, Settings s) {
+        String text = normalize(raw);
+        Set<String> hits = new LinkedHashSet<>();
+        Matcher ip = IPV4.matcher(text);
+        while (ip.find()) {
+            String value = ip.group();
+            if (publicIp(value) && !s.allowedIps.contains(value)) hits.add(value);
+        }
+        Matcher domain = DOMAIN.matcher(text);
+        while (domain.find()) {
+            String host = domain.group();
+            // 自己服务器和内置受信任平台（B站/GitHub/mcmod 等）不用探，省一次外联。
+            if (!endsWithAny(host, s.allowedDomains)) hits.add(host);
+        }
+        return new ArrayList<>(hits);
+    }
+
     /** 返回命中的 IP/域名，按出现顺序去重；白名单内的地址不返回。 */
     public static List<String> find(String raw, Settings s) {
         String text = normalize(raw);

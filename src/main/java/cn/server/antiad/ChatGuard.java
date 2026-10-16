@@ -224,8 +224,14 @@ public final class ChatGuard implements Listener {
     /** 重新合成一次聊天事件（异步事件只能在异步线程触发），交给聊天插件按它的格式广播。 */
     private void refire(Player player, Hold hold, String text) {
         markRefire(player, text);
-        Bukkit.getPluginManager().callEvent(new AsyncChatEvent(true, player, new LinkedHashSet<>(hold.viewers()),
-                hold.renderer(), hold.message(), hold.message(), null));
+        try {
+            Bukkit.getPluginManager().callEvent(new AsyncChatEvent(true, player, new LinkedHashSet<>(hold.viewers()),
+                    hold.renderer(), hold.message(), hold.message(), null));
+        } finally {
+            // 事件没人消费（被更早的监听器取消、或玩家中途掉线）就把标记清掉：
+            // 否则这个玩家下次发一模一样的内容会被当成"重放"直接跳过检查。
+            clearRefire(player, text);
+        }
     }
 
     /** 取消事件（同时拦住 TrChat 这类 HIGHEST 优先级的格式化插件），再把内容只补发给发送者。 */
@@ -264,9 +270,11 @@ public final class ChatGuard implements Listener {
         return now.isEmpty() ? null : now.get(0);
     }
 
-    /** 是否在管制范围：老玩家免检，其余都查（含刚进服的强制管制期）。 */
+    /** 是否在管制范围：白名单玩家与有绕过权限的免检，老玩家免检，其余都查（含刚进服的强制管制期）。 */
     static boolean watched(AntiAdPlugin plugin, Player player) {
         Settings settings = plugin.settings();
+        // 玩家白名单（config 里写死的人）：完全免检，等价于给了 bypass 权限 —— 不用担心忘了给权限。
+        if (settings.playerAllowed(player.getUniqueId(), player.getName())) return false;
         if (!settings.bypassPermission.isEmpty() && player.hasPermission(settings.bypassPermission)) return false;
         long now = System.currentTimeMillis();
         // 前 new-player-minutes 分钟一律强制检查。
@@ -320,6 +328,12 @@ public final class ChatGuard implements Listener {
         refire.put(player.getUniqueId(), text);
     }
 
+    /** 清掉这条重放标记（只在内容还一致时清，避免误删紧接着的新标记）。 */
+    private synchronized void clearRefire(Player player, String text) {
+        String pending = refire.get(player.getUniqueId());
+        if (pending != null && pending.equals(text)) refire.remove(player.getUniqueId());
+    }
+
     /** 主线程执行：写记录、通报管理员。规则命中的地址要等一次探测确认 —— 确认是活的 MC 服务器才计入封禁次数（防止随手打一个不存在的网址被累计封号）。 */
     private void handle(Player player, String text, String match, String word, InetAddress address, String kind) {
         Settings settings = plugin.settings();
@@ -346,8 +360,17 @@ public final class ChatGuard implements Listener {
         plugin.runAsync(() -> {
             Probe.Result result = probes.lookup(host, port, settings);
             boolean hard = hardHit(settings, result);
-            plugin.runFor(player, () -> finish(player, address, text, match, ip, kind, result, hard));
+            finishSafely(player, address, text, match, ip, kind, result, hard);
         });
+    }
+
+    /**
+     * 探测回来后才决定处置，这几秒里玩家可能已经掉线：掉线时不能再往实体线程上排任务
+     * （会抛异常，这次命中也就白记了 —— 等于给了"发完立刻退"绕过计数的路子），改到全局线程做。
+     */
+    private void finishSafely(Player player, InetAddress address, String text, String match, String ip, String kind, Probe.Result result, boolean hard) {
+        if (player.isOnline()) plugin.runFor(player, () -> finish(player, address, text, match, ip, kind, result, hard));
+        else plugin.runGlobal(() -> finish(player, address, text, match, ip, kind, result, hard));
     }
 
     /**
@@ -386,14 +409,16 @@ public final class ChatGuard implements Listener {
         String reason = Messages.replace(settings.banReason, "{match}", match, "{contact}", settings.contact);
         // IP 与账号一起封：换 IP 或换名字都进不来，解封需要管理员 pardon。
         plugin.ban(player.getUniqueId(), player.getName(), address, reason, expires);
-        player.kick(Messages.fill(settings.kickMessage, "{match}", match, "{contact}", settings.contact));
+        if (player.isOnline()) player.kick(Messages.fill(settings.kickMessage, "{match}", match, "{contact}", settings.contact));
         plugin.notifyStaff("&c" + player.getName() + " &7（&f" + ip + "&7）因宣传服务器广告被封禁 IP 与账号：" + match);
     }
 
     /** 送给 AI 的地址情报：消息里的地址逐个探测（最多两个），拼成一行；没地址/关掉了会说清楚。 */
     String probeIntel(String text, Settings settings) {
         if (!settings.probeEnabled) return "已关闭地址探测";
-        List<String> addresses = Detector.find(text, settings);
+        // 用 addresses 而不是 find：规则没命中、但要送 AI 的消息里，域名往往不是我们认的后缀，
+        // 那条消息恰恰最需要"对方到底是不是服务器"这个事实。
+        List<String> addresses = Detector.addresses(text, settings);
         if (addresses.isEmpty()) return "消息里没有地址";
         String normalized = Detector.normalize(text);
         StringBuilder out = new StringBuilder();

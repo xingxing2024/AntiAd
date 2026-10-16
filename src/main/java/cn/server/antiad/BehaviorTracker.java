@@ -122,7 +122,12 @@ public final class BehaviorTracker implements Listener {
     }
 
     @EventHandler public void quit(PlayerQuitEvent event) {
-        onQuit(event.getPlayer());
+        Player player = event.getPlayer();
+        // 这两个表只对在线玩家有意义，退出就清掉：不然一个长期开着的服会一直往上涨。
+        UUID id = player.getUniqueId();
+        playTicks.remove(id);
+        violations.remove(id);
+        onQuit(player);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

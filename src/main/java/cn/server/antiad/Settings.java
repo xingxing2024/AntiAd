@@ -24,7 +24,7 @@ public final class Settings {
     public long banSeconds;
     public String banReason, kickMessage, notifyPermission, bypassPermission, contact, banCommand, unbanCommand;
     public String aiUrl, aiKey, aiModel, aiPrompt;
-    public Set<String> checkedCommands, allowedDomains, allowedIps, tlds, bannedWords, selfDomains, aiTriggerWords;
+    public Set<String> checkedCommands, allowedDomains, allowedIps, allowedPlayers, tlds, bannedWords, selfDomains, aiTriggerWords;
 
     /** 打包的 tlds.txt / trusted-domains.txt 读不到时的兜底。 */
     private static final Set<String> FALLBACK_TLDS = Set.of("com", "cn", "net", "org", "ren", "top", "xyz", "icu", "vip", "shop", "me", "cc", "gg");
@@ -125,6 +125,8 @@ public final class Settings {
         s.allowedDomains = new HashSet<>(s.selfDomains);
         s.allowedDomains.addAll(TRUSTED_DOMAINS);
         s.allowedIps = new HashSet<>(c.getStringList("whitelist.ips"));
+        // 玩家白名单：名字（不分大小写）或 UUID（带不带横线都行），名单里的人完全免检。
+        s.allowedPlayers = playerSet(c.getStringList("whitelist.players"));
         // tlds 不写 = 内置的服务器常用后缀；写空列表 = 不检测域名，只检测 IP。
         s.tlds = c.isSet("tlds") ? lowerSet(c.getStringList("tlds")) : builtInTlds();
         s.bannedWords = new HashSet<>();
@@ -158,6 +160,26 @@ public final class Settings {
         } catch (IOException e) {
             return fallback;
         }
+    }
+
+    /**
+     * 玩家白名单是否命中：名字不分大小写；UUID 写成带横线或不带横线都认。
+     * 名单为空时直接返回 false，不影响其它判断。
+     */
+    public boolean playerAllowed(UUID uuid, String name) {
+        if (allowedPlayers.isEmpty()) return false;
+        if (name != null && allowedPlayers.contains(name.toLowerCase(Locale.ROOT))) return true;
+        return uuid != null && allowedPlayers.contains(uuid.toString().replace("-", ""));
+    }
+
+    /** 归一化玩家白名单：统一小写、去掉 UUID 的横线（名字里本来不会有横线）。 */
+    static Set<String> playerSet(Collection<String> values) {
+        Set<String> result = new HashSet<>();
+        for (String value : values) {
+            String normalized = value.strip().toLowerCase(Locale.ROOT).replace("-", "");
+            if (!normalized.isEmpty()) result.add(normalized);
+        }
+        return result;
     }
 
     /** 白名单允许写成 http://example.com/ 或 *.example.com 这种常见形式。 */

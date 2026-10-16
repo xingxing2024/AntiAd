@@ -140,6 +140,18 @@ class DetectorTest {
         assertEquals(List.of("链接样式"), Detector.hints("看看 mc.example.ren", banned, triggers));
     }
 
+    @Test void 探测用的地址范围比命中规则宽() {
+        Settings s = settings();
+        s.tlds = java.util.Set.of("com");
+        s.allowedDomains = java.util.Set.of("example.com");
+        s.allowedIps = java.util.Set.of("1.2.3.4");
+        assertTrue(Detector.find("来玩 mc.example.invalid", s).isEmpty(), "不在后缀表里 → 规则不命中");
+        assertEquals(List.of("mc.example.invalid"), Detector.addresses("来玩 mc.example.invalid", s), "但探测时仍要认出它");
+        assertTrue(Detector.addresses("看 example.com", s).isEmpty(), "白名单域名不探");
+        assertTrue(Detector.addresses("ip 1.2.3.4", s).isEmpty(), "白名单 IP 不探");
+        assertEquals(List.of("8.8.8.8"), Detector.addresses("ip 8.8.8.8", s));
+    }
+
     @Test void 结构异常只看形状() {
         Settings s = settings();
         s.structureEnabled = true;

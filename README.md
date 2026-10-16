@@ -17,7 +17,7 @@
    - 玩家本人**收不到任何提示**（不警告、不通知）。
 4. 累计与封禁：同一玩家在 `trigger.window-seconds`（默认 60）秒内累计到 `trigger.hits`（默认 3）次，第 3 次封禁 IP + 账号、踢出，封禁理由与踢出提示里带 `{contact}`（默认「服务器交流群」）。
 5. `/me` 这类广播命令没有“只给本人看”的通道，命中广告时直接拦下，其余照常按累计规则处理（不走 AI）。
-6. 误伤可控：`antiad.bypass`（默认 OP）完全跳过；`whitelist.domains` 写你自己服务器域名（默认 `example.com` 是示例，记得改成自己的），`whitelist.ips` 写入口 IP 与你自己用的号码（例如自己的 QQ 群号，写进去就不会被当成数字 IP）；内置**受信任站点表**（B站、YouTube、GitHub、mcmod、Modrinth、CurseForge、MC 官方与常见论坛、网盘等，见 jar 内 `trusted-domains.txt`）里的链接一律不算广告，不隐藏、不累计、不封禁。
+6. 误伤可控：`antiad.bypass`（默认 OP）完全跳过；**玩家白名单** `whitelist.players` 写名字或 UUID（不用记着给权限，名单里的人完全免检）；`whitelist.domains` 写你自己服务器域名（默认 `example.com` 是示例，记得改成自己的），`whitelist.ips` 写入口 IP 与你自己用的号码（例如自己的 QQ 群号，写进去就不会被当成数字 IP）；内置**受信任站点表**（B站、YouTube、GitHub、mcmod、Modrinth、CurseForge、MC 官方与常见论坛、网盘等，见 jar 内 `trusted-domains.txt`）里的链接一律不算广告，不隐藏、不累计、不封禁。
 
 ## 检测内容（宁漏不误伤）
 
@@ -146,7 +146,7 @@
 ## 安装
 
 1. 服务器 Java **21 或更新**（1.21.x 服务端用 Java 21，26.x 用 Java 25 —— 插件按 Java 21 编译，两边都能跑）。
-2. 把 `target/AntiAd-1.0.10.jar`（约 110 KB）放进 `plugins`。
+2. 把 `target/AntiAd-1.0.12.jar`（约 110 KB）放进 `plugins`。
 3. 首次启动会自动从**阿里云镜像**下载 SQLite 驱动到服务端根目录的 `libraries/org/xerial/sqlite-jdbc/`（想换源：启动参数 `-Dorg.bukkit.plugin.java.LibraryLoader.centralURL=<仓库>`；**无外网**就手动下 `https://maven.aliyun.com/repository/public/org/xerial/sqlite-jdbc/3.51.0.0/sqlite-jdbc-3.51.0.0.jar` 放进那个目录）。
 4. 启动一次后编辑 `plugins/AntiAd/config.yml`（把 `whitelist.domains` / `whitelist.ips` 改成自己服务器的域名、入口 IP、自己的 QQ 群号，`punish.contact` 改成你的解封联系方式，要用 AI 再填 `ai.api-key`），然后 `/antiad reload`。
 
