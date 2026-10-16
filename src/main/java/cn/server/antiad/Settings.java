@@ -13,14 +13,16 @@ public final class Settings {
     public boolean checkChat, storageEnabled, checkNumericIp, aiEnabled, aiFailOpen, aiRefire, behaviorEnabled;
     public boolean banByCommand;
     public boolean structureEnabled, checkSigns, checkAnvil, checkBooks;
+    public boolean probeEnabled, probeFetchTitle;
     public int hits, windowSeconds, newPlayerMinutes, keepDays, aiTimeout, aiContext, aiConcurrent;
+    public int probeTimeoutMs, probeCacheSeconds;
     public int normalScore, suspiciousScore, advertiserScore, defaultScore, blocksPerPoint, commandsPerPoint, maxActivityScore, adHitPenalty, wordHitPenalty;
     public int veteranPlayHours, veteranMinScore, veteranCleanHours;
     public int maxLength, minDigits, maxRareChars, combineMessages;
     public double maxDigitRatio;
     public double priceInput, priceOutput;
     public long banSeconds;
-    public String banReason, kickMessage, notifyPermission, bypassPermission, contact, storageFile, banCommand, unbanCommand;
+    public String banReason, kickMessage, notifyPermission, bypassPermission, contact, banCommand, unbanCommand;
     public String aiUrl, aiKey, aiModel, aiPrompt;
     public Set<String> checkedCommands, allowedDomains, allowedIps, tlds, bannedWords, selfDomains, aiTriggerWords;
 
@@ -69,7 +71,6 @@ public final class Settings {
         s.banReason = c.getString("punish.ban-reason", "宣传其他服务器（{match}），解封请联系{contact}");
         s.kickMessage = c.getString("punish.kick-message", "&c检测到宣传其他服务器，你的 IP 与账号已被封禁。\n&7解封请联系 {contact}");
         s.storageEnabled = c.getBoolean("storage.enabled", true);
-        s.storageFile = c.getString("storage.file", "antiad.db");
         s.keepDays = Math.max(0, c.getInt("storage.keep-days", 30));
         s.aiEnabled = c.getBoolean("ai.enabled", true);
         s.aiUrl = c.getString("ai.url", "https://open.bigmodel.cn/api/paas/v4/chat/completions");
@@ -104,6 +105,11 @@ public final class Settings {
         s.checkSigns = c.getBoolean("structure.check-signs", true);
         s.checkAnvil = c.getBoolean("structure.check-anvil", true);
         s.checkBooks = c.getBoolean("structure.check-books", true);
+        // 地址情报探测：判断命中的地址到底是不是真的 Minecraft 服务器（SRV + 协议探测 + 网页标题）。
+        s.probeEnabled = c.getBoolean("probe.enabled", true);
+        s.probeTimeoutMs = Math.max(200, c.getInt("probe.timeout-ms", 2000));
+        s.probeCacheSeconds = Math.max(0, c.getInt("probe.cache-seconds", 600));
+        s.probeFetchTitle = c.getBoolean("probe.fetch-title", true);
         s.aiPrompt = c.getString("ai.prompt", DEFAULT_AI_PROMPT);
         // AI 预筛：关键词表为空 = 所有带文字的消息都送 AI；不写这一项 = 用内置关键词表，只送像广告的。
         if (c.isSet("ai.trigger-words")) {

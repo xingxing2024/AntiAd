@@ -43,6 +43,8 @@ public final class ChatGuard implements Listener {
 
     private final AntiAdPlugin plugin;
     private final Strikes strikes = new Strikes();
+    /** 地址情报探测（SRV + 协议探测 + 网页标题），结论只当线索。 */
+    private final Probe probes = new Probe();
     private final Map<UUID, Deque<String>> contexts = new HashMap<>();
     private final Map<UUID, String> refire = new HashMap<>();
 
@@ -119,14 +121,16 @@ public final class ChatGuard implements Listener {
         plugin.aiPool().submit(() -> {
             Settings current = plugin.settings();
             long start = System.currentTimeMillis();
+            // 送 AI 之前先把消息里的地址探一下：结论是"对方真的是台 MC 服"还是"只是个网站"，直接决定判定准确率。
+            String intel = probeIntel(text, current);
             Ai.Verdict verdict = plugin.ai().judge(current, minutes(player),
-                    strikes.count(player.getUniqueId(), System.currentTimeMillis(), current.windowSeconds), hints, history, text);
+                    strikes.count(player.getUniqueId(), System.currentTimeMillis(), current.windowSeconds), hints, intel, history, text);
             long cost = System.currentTimeMillis() - start;
             plugin.recordUsage(verdict);
             // AI 输出也写到后台，管理员能核对每一条判定（包括"不是广告"）。
             plugin.getLogger().info("AI 审核 " + player.getName() + "：" + (verdict.ad() ? "是广告" : "不是广告")
                     + "（理由：" + verdict.reason() + "；耗时 " + cost + "ms；tokens " + verdict.promptTokens() + "+" + verdict.completionTokens()
-                    + "；线索：" + (hints.isEmpty() ? "无" : String.join("、", hints)) + "）消息：" + text);
+                    + "；线索：" + (hints.isEmpty() ? "无" : String.join("、", hints)) + "；地址情报：" + intel + "）消息：" + text);
             plugin.runFor(player, () -> deliver(hold, text, verdict));
         });
     }
@@ -333,6 +337,8 @@ public final class ChatGuard implements Listener {
         plugin.behavior().countViolation(player);
         plugin.record(player, ip, kind, match, text, "hidden");
         plugin.notifyStaff("&e" + player.getName() + " &7对话命中广告（&f" + match + "&7，" + count + "/" + threshold + "），已仅本人可见");
+        // 顺手探一下这个地址是不是真的 MC 服务器，结论出来后再补一条通报（异步、带缓存、不阻塞玩家线程）。
+        probeAddress(text, match);
         if (count < threshold || address == null) return;
         strikes.clear(player.getUniqueId());
         plugin.behavior().markBanned(player);
@@ -343,6 +349,41 @@ public final class ChatGuard implements Listener {
         plugin.ban(player.getUniqueId(), player.getName(), address, reason, expires);
         player.kick(Messages.fill(settings.kickMessage, "{match}", match, "{contact}", settings.contact));
         plugin.notifyStaff("&c" + player.getName() + " &7（&f" + ip + "&7）因宣传服务器广告被封禁 IP 与账号：" + match);
+    }
+
+    /** 地址情报：异步探测 + 通报（结果只作为线索，不影响已经做出的处置）。 */
+    private void probeAddress(String text, String match) {
+        if (!plugin.settings().probeEnabled || match == null) return;
+        String host = Probe.hostOf(match);
+        if (host == null) return;
+        int port = Probe.portOf(Detector.normalize(text), host);
+        plugin.runAsync(() -> {
+            Probe.Result result = probes.lookup(host, port, plugin.settings());
+            if (!result.probed()) return;
+            plugin.runGlobal(() -> plugin.notifyStaff("&7地址情报（&f" + host + ":" + port + "&7）：&f" + result.text()
+                    + (result.minecraft() ? "" : "&8（也可能只是网站或屏蔽了探测）")));
+        });
+    }
+
+    /** 送给 AI 的地址情报：消息里的地址逐个探测（最多两个），拼成一行；没地址/关掉了会说清楚。 */
+    String probeIntel(String text, Settings settings) {
+        if (!settings.probeEnabled) return "已关闭地址探测";
+        List<String> addresses = Detector.find(text, settings);
+        if (addresses.isEmpty()) return "消息里没有地址";
+        String normalized = Detector.normalize(text);
+        StringBuilder out = new StringBuilder();
+        int probed = 0;
+        for (String address : addresses) {
+            if (probed >= 2) break;   // 一条消息最多探两个，别让玩家等太久
+            String host = Probe.hostOf(address);
+            if (host == null) continue;
+            Probe.Result result = probes.lookup(host, Probe.portOf(normalized, host), settings);
+            if (!result.probed()) continue;
+            probed++;
+            if (out.length() > 0) out.append("；");
+            out.append(host).append("：").append(result.text());
+        }
+        return out.length() == 0 ? "探测无结论" : out.toString();
     }
 
     private static InetAddress address(Player player) {
