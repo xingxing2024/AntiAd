@@ -2,7 +2,7 @@
 
 > 逐项说明与"怎么做"见 [`wiki/`](wiki/Home.md)；本文件是功能全表。
 
-Purpur / Paper 26.2+（实测 Purpur 26.3-2642 / Java 25）· 不依赖 Vault · 记录用 SQLite（驱动由插件自带加载器从阿里云镜像下载，插件本体约 110 KB）。
+Paper / Purpur / Folia 1.21.1 ~ 26.x（一份 jar，Java 21+；实测 Java 21 + Purpur 1.21.1 与 Java 25 + Purpur 26.3）· 不依赖 Vault · 记录用 SQLite（驱动由插件自带加载器从阿里云镜像下载，插件本体约 110 KB）。
 目标：**只管新玩家**的广告与违规内容，命中不删消息、只让发送者自己看见，管理员能查、能复盘、能封。
 
 ## 1. 检查范围
@@ -150,7 +150,7 @@ SQLite `plugins/AntiAd/antiad.db`：
 
 ## 9. 兼容与集成
 
-- 服务端：**Paper / Purpur / Folia** 26.2+（`folia-supported: true`，全部用区域化调度 `GlobalRegionScheduler` / `EntityScheduler`，调度同样的代码在 Paper 上落到主线程）。已在 **Folia 26.2-7** 实测：插件正常加载启用、周期任务在 `Folia Region Scheduler Thread` 执行、命令全部可用。
+- 服务端：**Paper / Purpur / Folia 1.21.1 ~ 26.x**（一份 jar；`folia-supported: true`，全部用区域化调度 `GlobalRegionScheduler` / `EntityScheduler`，调度同样的代码在 Paper 上落到主线程）。已在 **Folia 26.2-7** 实测：插件正常加载启用、周期任务在 `Folia Region Scheduler Thread` 执行、命令全部可用。
 - 线程模型：聊天事件是异步的，处理器只读内存缓存（老玩家判定所需的在线时长/违规次数每分钟在玩家线程上刷新）；所有对玩家的动作（补发消息、踢出、封禁、通报）都通过 `EntityScheduler` 在该玩家所属区域线程执行；SQLite 写入用同步方法保护。
 - 同时兼容装了 **TrChat** 这类接管聊天的插件（实测 A/B：旧实现会被 TrChat 绕过，新实现 0 次广播）。
 - 记录库需要写 `plugins/AntiAd/`；AI 需要出网（本地 Ollama 可离线）。
@@ -170,8 +170,9 @@ SQLite `plugins/AntiAd/antiad.db`：
 ## 11. 验证情况
 
 - 54 个单元测试：检测规则、归一化、误伤用例、数字 IP、内置后缀、受信任平台、跨消息拼接（含连锁误伤回归）、结构调整、行为打分/分类/阈值、SQLite 三类表读写（含重启恢复）、地址情报探测（对着本机假 MC 服务器验协议、对着假 HTTP 服务器验标题抓取、缓存与私网拦截）、AI 客户端（本地假接口验证请求体/解析/超时/fail-open）。
-- 真机（Purpur 26.3 / Java 25，另加 TrChat 2.5.2 与 fakeplayer 0.4.5 做对照）：
+- 真机（Java 25 + Purpur 26.3，另加 TrChat 2.5.2 与 fakeplayer 0.4.5 做对照）：
   - 影子隐藏穿透 TrChat：旧版 3 次广播、新版 0 次（A/B 对照）。
   - 新玩家挖 53 格 → 行为分 21 → 观望，落库后 `/antiad behavior` 可见；老玩家 0 统计。
   - 拼接 / 结构 / 告示牌三条链路命中、记录类型正确，正常消息放行。
+  - 版本兼容：同一份 jar 在 Java 21 + Purpur 1.21.1 与 Java 25 + Purpur 26.3 上都能加载启用（驱动从阿里云镜像自动下载、antiad.db 正常创建、周期任务无异常）。
   - 封禁写入 `banned-ips.json` 与 `banned-players.json`（`expires: forever`），`/stop` 干净退出。

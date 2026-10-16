@@ -1,12 +1,12 @@
-﻿# 兼容与 Folia
+# 兼容与 Folia
 
 ## 服务端
 
 | 核心 | 状态 |
 |---|---|
-| Paper / Purpur 26.2+ | ✅ 实测 Purpur 26.3-2642 |
-| Folia 26.2+ | ✅ 实测 Folia 26.2-7（`folia-supported: true`） |
-| Spigot / 旧版本 | ❌ 用了 Paper 的 `AsyncChatEvent` 与区域化调度 API |
+| Paper / Purpur 1.21.1 ~ 26.x | ✅ 实测 Purpur 1.21.1（Java 21）与 26.3-2642（Java 25） |
+| Folia 1.21.1 ~ 26.x | ✅ 实测 Folia 26.2-7（`folia-supported: true`） |
+| Spigot / 1.21.1 以下 | ❌ 用了 Paper 的 `AsyncChatEvent`、`BanListType`、区域化调度等 API |
 
 ## 调度模型（Folia 安全）
 
