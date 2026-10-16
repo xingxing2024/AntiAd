@@ -102,14 +102,34 @@ class ProbeTest {
         assertFalse(result.text().contains("§"));
     }
 
-    @Test void 状态被屏蔽但端口开着也算服务器() throws Exception {
+    @Test void 状态被屏蔽但端口有应答也算服务器() throws Exception {
         int port = fakeServer(null);   // 连得上，但回的是垃圾数据
         Probe.Result result = new Probe(true).lookup("127.0.0.1", port, settings(false));
         assertTrue(result.probed());
         assertFalse(result.minecraft());
-        assertTrue(result.portOpen(), "端口连得上但没回状态 → 算作服务器（enable-status=false / 只挡探测）");
-        assertTrue(result.text().contains("开着的"), result.text());
+        assertTrue(result.portOpen(), "端口有应答但没回状态 → 算作服务器（enable-status=false / 屏蔽探测）");
+        assertTrue(result.text().contains("有服务在应答"), result.text());
         assertTrue(ChatGuard.hardHit(settings(true), result), "这种也要计入封禁次数");
+    }
+
+    @Test void 只接连接不说话的不算服务器() throws Exception {
+        // 高防/云防火墙常见行为：把 TCP 连接接住，然后一声不吭
+        ServerSocket silent = new ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"));
+        Thread thread = new Thread(() -> {
+            try (Socket socket = silent.accept()) {
+                Thread.sleep(5000);   // 接住就不管了
+            } catch (Exception ignored) {
+            }
+        });
+        thread.setDaemon(true);
+        thread.start();
+        Settings settings = settings(false);
+        settings.probeTimeoutMs = 1200;
+        Probe.Result result = new Probe(true).lookup("127.0.0.1", silent.getLocalPort(), settings);
+        assertTrue(result.probed());
+        assertFalse(result.minecraft());
+        assertFalse(result.portOpen(), "只是接了连接、没说话 → 不能算确认（否则高防后面的假端口也会被当成服务器）");
+        silent.close();
     }
 
     @Test void 端口没人听时给的是没响应() throws Exception {
@@ -179,6 +199,12 @@ class ProbeTest {
         assertNull(Probe.hostOf("  "));
         assertEquals(25567, Probe.portOf("来玩 mc.example.com:25567", "mc.example.com"));
         assertEquals(25565, Probe.portOf("来玩 mc.example.com", "mc.example.com"));
+        assertEquals(47514, Probe.portOf("来玩 mc.example.com: 47514", "mc.example.com"));        // 冒号后有空格
+        assertEquals(47514, Probe.portOf("来玩 mc.example.com 端口 47514", "mc.example.com"));    // 中文写法
+        assertEquals(47514, Probe.portOf("玩 mc.example.com 端口号:47514 很好玩", "mc.example.com"));
+        assertEquals(47514, Probe.portOf("mc.example.com 反向 47514", "mc.example.com"));
+        assertEquals(25565, Probe.portOf("mc.example.com 端口 99999999", "mc.example.com"));      // 端口越界 → 用默认
+        assertEquals(25565, Probe.portOf("先加群 123456 再来看 mc.example.com", "mc.example.com")); // 主机后面的数字才认
     }
 
     @Test void 只探公网地址() throws Exception {
