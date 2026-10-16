@@ -70,7 +70,7 @@ public final class AntiAdPlugin extends JavaPlugin {
         getLogger().info("AntiAd 已启用：只检查 " + (settings.newPlayerMinutes > 0 ? "进服 " + settings.newPlayerMinutes + " 分钟内的新玩家" : "所有玩家")
                 + "，命中的消息仅本人可见，管理员会收到通报；" + settings.windowSeconds + " 秒内累计 " + settings.hits + " 次广告命中将封禁 IP 与账号"
                 + (settings.bannedWords.isEmpty() ? "。" : "；敏感词命中交 AI 判断。")
-                + (store == null ? " 记录库未启用。" : " 记录写入 " + settings.storageFile + "。")
+                + (store == null ? " 记录库未启用。" : " 记录写入 antiad.db。")
                 + (settings.aiEnabled && !settings.aiKey.isBlank() ? " AI 审核已开启：" + settings.aiModel + "。" : " AI 审核未开启。"));
     }
 
@@ -137,12 +137,12 @@ public final class AntiAdPlugin extends JavaPlugin {
     private void openStore() {
         if (!settings.storageEnabled) return;
         try {
-            store = new Store(getDataFolder().toPath().resolve(settings.storageFile), getLogger());
+            store = new Store(getDataFolder().toPath().resolve("antiad.db"), getLogger());
             long now = System.currentTimeMillis();
             if (settings.keepDays > 0) store.purge(now - settings.keepDays * 86_400_000L);
             guard.seed(store.adHits(now - settings.windowSeconds * 1000L));
         } catch (Exception e) {
-            getLogger().warning("无法打开记录库 " + settings.storageFile + "，改为只记在内存中: " + e.getMessage());
+            getLogger().warning("无法打开记录库 antiad.db，改为只记在内存中: " + e.getMessage());
             store = null;
         }
     }
@@ -246,6 +246,11 @@ public final class AntiAdPlugin extends JavaPlugin {
     /** 近一段时间的违规命中次数（老玩家判定用）。 */
     public int violations(java.util.UUID player, long since) {
         return store == null ? 0 : store.violations(player, since);
+    }
+
+    /** 地址情报：给 /antiad ai 与 AI 审核用的线索（会阻塞，必须在异步线程调用）。 */
+    public String probeIntel(String text) {
+        return guard.probeIntel(text, settings);
     }
 
     /** 记一次 AI 调用的 token 用量，用于 /antiad cost；记录库未启用时忽略。 */

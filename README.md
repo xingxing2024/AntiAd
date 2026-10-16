@@ -29,6 +29,16 @@
 - 白名单域名同时覆盖子域名（写 `example.com`，`play.example.com` 也放行）。
 - 不检测 IPv6：聊天里出现 IPv6 字符串基本只会误伤。
 
+## 地址情报（判断"这到底是不是 MC 服务器"）
+
+命中地址、或消息要送 AI 时，插件会顺带做一次技术探测，回答"这个地址是不是一台真的 Minecraft 服务器"，**免费、不调 AI**：
+
+- **SRV 判定**：查 `_minecraft._tcp.<域名>`。这个记录只有 MC 客户端会查，存在基本就是 MC 服；并按其指向的主机/端口去连 —— 所以"域名 + SRV 指向 25567 端口"的服务器也能被认出来。
+- **协议探测**：按 Minecraft 服务器列表协议 ping 一次，真服务器会回版本 / 在线人数 / MOTD。
+- **网页标题**：没确认是服务器时，抓一眼首页 `<title>`，看是不是「XX 我的世界服务器」站点。
+
+结论作为 `{probe}` 线索进 AI 提示词（模型据此判断"他拉你去的是真服务器还是网站"），命中地址时给管理员补一条通报，`/antiad test <文本>` 也能看到。只探**公网地址**（回环/内网/CGNAT/组播一律拒绝，不当内网扫描器），全异步、有缓存、有超时预算，可 `probe.enabled: false` 关掉。
+
 ## AI 审核（默认接智谱 GLM-4-Flash，免费）
 
 1. 去 `https://open.bigmodel.cn` 注册，创建 API Key（GLM-4-Flash 官方标称免费）。
@@ -38,7 +48,7 @@
 - 速度优先：默认 `timeout-seconds: 2`，AI 调用走插件自己的线程池（`ai.max-concurrent` 默认 3，防止免费额度被限流，改后需重启）；超时、限流（429）、报错一律按 `fail-open` 放行。用 DeepSeek 这类首字延迟 1~3 秒的服务时，把 `timeout-seconds` 调到 4~6，否则会频繁超时=放行。
 - 免费额度高峰会变慢或限流，这时命中判定等于“放行”，IP/域名/违禁词规则仍在兜底 —— 宁可漏也不误伤。
 - 只审规则没命中的消息，且只审新玩家窗口内的消息：老玩家、已被规则命中的消息不会消耗 token。
-- `prompt` 可改，占位符：`{self}`、`{minutes}`、`{hits}`、`{words}`（命中的敏感词线索）、`{context}`、`{message}`；模型必须回 `{"ad":true/false,"reason":"..."}`（解析时按这个形状找，回显提示词不算判定）。
+- `prompt` 可改，占位符：`{self}`、`{minutes}`、`{hits}`、`{words}`（命中的敏感词线索）、`{probe}`（地址情报）、`{context}`、`{message}`；模型必须回 `{"ad":true/false,"reason":"..."}`（解析时按这个形状找，回显提示词不算判定）。
 - **注意**：玩家的聊天内容会发送给智谱的接口，请自行确认隐私与合规；模型被提示词注入时可能误判（单条误判只隐藏消息，连续 3 次才封禁）。
 
 ### 怎么判断 AI 审核到底有没有在跑
@@ -123,13 +133,13 @@
 ## 安装
 
 1. 服务器 Java 25。
-2. 把 `target/AntiAd-1.0.2.jar`（约 110 KB）放进 `plugins`。
+2. 把 `target/AntiAd-1.0.3.jar`（约 110 KB）放进 `plugins`。
 3. 首次启动会自动从**阿里云镜像**下载 SQLite 驱动到服务端根目录的 `libraries/org/xerial/sqlite-jdbc/`（想换源：启动参数 `-Dorg.bukkit.plugin.java.LibraryLoader.centralURL=<仓库>`；**无外网**就手动下 `https://maven.aliyun.com/repository/public/org/xerial/sqlite-jdbc/3.51.0.0/sqlite-jdbc-3.51.0.0.jar` 放进那个目录）。
 4. 启动一次后编辑 `plugins/AntiAd/config.yml`（把 `whitelist.domains` / `whitelist.ips` 改成自己服务器的域名、入口 IP、自己的 QQ 群号，`punish.contact` 改成你的解封联系方式，要用 AI 再填 `ai.api-key`），然后 `/antiad reload`。
 
 ## 构建与测试
 
-`mvn package`（用 Purpur 26.2 API 构建，可直接跑在 26.2 及更新版本）。**支持 Paper / Purpur / Folia**（`folia-supported: true`，全部改用区域化调度，Paper 上自动落到主线程）。`mvn test` 覆盖检测器（命中、归一化、白名单、受信任平台、误伤用例、违禁词、数字 IP、内置后缀、跨消息拼接、结构调整）、行为分类与老玩家判定、计数、SQLite（含重启恢复）、AI 客户端（本地假接口验证请求体、解析、超时与 fail-open）。
+`mvn package`（用 Purpur 26.2 API 构建，可直接跑在 26.2 及更新版本）。**支持 Paper / Purpur / Folia**（`folia-supported: true`，全部改用区域化调度，Paper 上自动落到主线程）。`mvn test` 覆盖检测器（命中、归一化、白名单、受信任平台、误伤用例、违禁词、数字 IP、内置后缀、跨消息拼接、结构调整）、行为分类与老玩家判定、计数、SQLite（含重启恢复）、地址情报探测（本机假 MC 服务器验协议、假 HTTP 服务器验标题、缓存与私网拦截）、AI 客户端（本地假接口验证请求体、解析、超时与 fail-open）。
 
 ## 已知限制
 

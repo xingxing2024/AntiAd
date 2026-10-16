@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -84,6 +85,34 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
                 ? "&e命中敏感词：&f" + word + "&7（作为线索送 AI，由 AI 判断是不是广告）"
                 : "&c命中敏感词：&f" + word + "&7（AI 未启用：直接只给本人可见）"));
         if (hits.isEmpty() && word == null) sender.sendMessage(Messages.text(aiGate(text, settings)));
+        probeTest(sender, text, hits, settings);
+    }
+
+    /** `/antiad test` 的地址情报：异步探测命中的地址到底是不是真的 MC 服务器，结论回来再补一条消息。 */
+    private void probeTest(CommandSender sender, String text, List<String> hits, Settings settings) {
+        if (!settings.probeEnabled) {
+            sender.sendMessage(Messages.text("&7地址情报：&8已在配置里关闭（probe.enabled）"));
+            return;
+        }
+        if (hits.isEmpty()) return;
+        String normalized = Detector.normalize(text);
+        List<String> hosts = new ArrayList<>();
+        for (String hit : hits) {
+            String host = Probe.hostOf(hit);
+            if (host != null && !hosts.contains(host)) hosts.add(host);
+        }
+        if (hosts.isEmpty()) return;
+        sender.sendMessage(Messages.text("&7地址情报探测中…（&f" + String.join("、", hosts) + "&7）"));
+        Probe probes = new Probe();
+        plugin.runAsync(() -> {
+            for (String host : hosts) {
+                Probe.Result result = probes.lookup(host, Probe.portOf(normalized, host), settings);
+                String line = result.probed()
+                        ? "&7地址情报（&f" + host + "&7）：&f" + result.text()
+                        : "&7地址情报（&f" + host + "&7）：&8没有结论（内网地址或探测失败）";
+                plugin.runGlobal(() -> sender.sendMessage(Messages.text(line)));
+            }
+        });
     }
 
     /** 告诉管理员这条消息按现在的配置会不会被送进 AI，方便验证预筛和额度。 */
@@ -117,7 +146,7 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
         long start = System.currentTimeMillis();
         plugin.aiPool().submit(() -> {
             Ai.Verdict verdict = plugin.ai().judge(plugin.settings(), 0, 0,
-                    Detector.hints(text, settings.bannedWords, settings.aiTriggerWords), List.of(), text);
+                    Detector.hints(text, settings.bannedWords, settings.aiTriggerWords), plugin.probeIntel(text), List.of(), text);
             plugin.recordUsage(verdict);
             long cost = System.currentTimeMillis() - start;
             boolean failed = verdict.reason().contains("失败") || verdict.reason().contains("接口返回") || verdict.reason().contains("无法解析");

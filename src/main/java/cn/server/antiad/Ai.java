@@ -33,13 +33,13 @@ public final class Ai {
         this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     }
 
-    public Verdict judge(Settings settings, long minutes, int hits, List<String> hints, List<String> context, String message) {
+    public Verdict judge(Settings settings, long minutes, int hits, List<String> hints, String probe, List<String> context, String message) {
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create(settings.aiUrl))
                     .timeout(Duration.ofSeconds(settings.aiTimeout))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + settings.aiKey)
-                    .POST(HttpRequest.BodyPublishers.ofString(request(settings, minutes, hits, hints, context, message), StandardCharsets.UTF_8))
+                    .POST(HttpRequest.BodyPublishers.ofString(request(settings, minutes, hits, hints, probe, context, message), StandardCharsets.UTF_8))
                     .build();
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() / 100 != 2) {
@@ -90,14 +90,19 @@ public final class Ai {
     }
 
     /** OpenAI 兼容的请求体；提示词里的占位符在这里替换。 */
-    static String request(Settings settings, long minutes, int hits, List<String> hints, List<String> context, String message) {
+    static String request(Settings settings, long minutes, int hits, List<String> hints, String probe, List<String> context, String message) {
         String prompt = settings.aiPrompt
                 .replace("{self}", settings.selfDomains.isEmpty() ? "（未配置）" : String.join("、", settings.selfDomains))
                 .replace("{minutes}", String.valueOf(minutes))
                 .replace("{hits}", String.valueOf(hits))
                 .replace("{words}", hints.isEmpty() ? "（无）" : String.join("、", hints))
+                .replace("{probe}", probe == null || probe.isBlank() ? "未探测" : probe)
                 .replace("{context}", context.isEmpty() ? "（暂无）" : String.join("\n", context))
                 .replace("{message}", shorten(message, MAX_MESSAGE));
+        // 老配置的提示词里没有 {probe}：自动把情报附在最后，否则探了也白探（想自定义就自己加 {probe}）。
+        if (probe != null && !probe.isBlank() && !settings.aiPrompt.contains("{probe}")) {
+            prompt = prompt + "\n地址情报：" + probe + "（这只是技术事实，判断仍以引流意图为准）";
+        }
         return "{\"model\":\"" + escape(settings.aiModel) + "\",\"temperature\":0,\"max_tokens\":128,\"messages\":[{\"role\":\"user\",\"content\":\""
                 + escape(prompt) + "\"}]}";
     }
