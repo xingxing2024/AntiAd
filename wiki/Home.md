@@ -41,6 +41,6 @@
 
 - 服务端：Paper / Purpur / Folia 26.2+（`api-version: 26.2`、`folia-supported: true`），实测 Purpur 26.3-2642 与 Folia 26.2-7。
 - Java：25（编译目标 25）。
-- 数据库：SQLite（驱动 `sqlite-jdbc` 按 `plugin.yml` 的 `libraries` 由服务端首次启动时下载，Apache-2.0）。
+- 数据库：SQLite（驱动 `sqlite-jdbc` 由插件自带的 Paper 加载器从**阿里云镜像**下载，Apache-2.0）。
 - 统计：内置 bStats（插件 ID 34706，可全局关闭）。
 - 不依赖 Vault / PlaceholderAPI / ProtocolLib。

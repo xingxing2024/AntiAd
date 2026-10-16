@@ -5,8 +5,12 @@ api-version: '${bukkit.api.version}'
 folia-supported: true
 description: 广告与违规内容管制（行为分类 + 结构规则 + 可选 AI），支持 Folia 区域化调度
 author: ServerTools
-# SQLite 驱动不打进 jar（否则要带上 23 个平台的原生库，12MB），改由服务端首次启动时自动下载到服务端根目录的 libraries/。
-# 服务器无外网时：手动把 sqlite-jdbc-<版本>.jar 放到 libraries/org/xerial/sqlite-jdbc/<版本>/ 下即可。
+# SQLite 驱动不打进 jar（否则要带上 23 个平台的原生库，12MB），改由下面的加载器在首次启动时拉取到
+# 服务端根目录的 libraries/ 里；加载器优先走国内镜像（阿里云），官方源只作兜底。详见 wiki 的「安装与升级」。
+paper-plugin-loader: cn.server.antiad.AntiAdLoader
+# 上面的加载器已经处理了驱动，这里让 Paper 不要再用默认方式解析一遍。
+paper-skip-libraries: true
+# 兜底：万一服务端不认 paper-plugin-loader，仍能按老机制（官方源，较慢）下载驱动。
 libraries:
   - org.xerial:sqlite-jdbc:3.51.0.0
 commands:

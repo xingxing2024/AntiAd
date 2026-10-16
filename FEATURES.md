@@ -2,7 +2,7 @@
 
 > 逐项说明与"怎么做"见 [`wiki/`](wiki/Home.md)；本文件是功能全表。
 
-Purpur / Paper 26.2+（实测 Purpur 26.3-2642 / Java 25）· 不依赖 Vault · 记录用 SQLite（驱动由服务端首次启动时自动下载，插件本体约 110 KB）。
+Purpur / Paper 26.2+（实测 Purpur 26.3-2642 / Java 25）· 不依赖 Vault · 记录用 SQLite（驱动由插件自带加载器从阿里云镜像下载，插件本体约 110 KB）。
 目标：**只管新玩家**的广告与违规内容，命中不删消息、只让发送者自己看见，管理员能查、能复盘、能封。
 
 ## 1. 检查范围
@@ -141,7 +141,7 @@ SQLite `plugins/AntiAd/antiad.db`：
 - 线程模型：聊天事件是异步的，处理器只读内存缓存（老玩家判定所需的在线时长/违规次数每分钟在玩家线程上刷新）；所有对玩家的动作（补发消息、踢出、封禁、通报）都通过 `EntityScheduler` 在该玩家所属区域线程执行；SQLite 写入用同步方法保护。
 - 同时兼容装了 **TrChat** 这类接管聊天的插件（实测 A/B：旧实现会被 TrChat 绕过，新实现 0 次广播）。
 - 记录库需要写 `plugins/AntiAd/`；AI 需要出网（本地 Ollama 可离线）。
-- 无 Vault、无 PlaceholderAPI、无 ProtocolLib 依赖；jar 本体约 **110 KB**（只 shade 了 bStats，已重定位到 `cn.server.antiad.bstats`，不会和其他插件冲突）。SQLite 驱动按 `plugin.yml` 的 `libraries` 由服务端首次启动时下载到 `libraries/org/xerial/sqlite-jdbc/`（无外网时手动放进去）。
+- 无 Vault、无 PlaceholderAPI、无 ProtocolLib 依赖；jar 本体约 **110 KB**（只 shade 了 bStats，已重定位到 `cn.server.antiad.bstats`，不会和其他插件冲突）。SQLite 驱动由插件自带的 Paper 加载器 `AntiAdLoader` 拉取：**优先阿里云公共仓库**，官方源兜底，下载到 `libraries/org/xerial/sqlite-jdbc/`（无外网时手动放进去，或改 `-Dorg.bukkit.plugin.java.LibraryLoader.centralURL`）。
 - 匿名统计：bStats 插件 ID `34706`，只上报版本/服务端/Java/在线人数/地区这类信息，不含玩家名、IP、聊天内容；可在 `plugins/bStats/config.yml` 里 `enabled: false` 全局关闭。
 
 ## 10. 已知限制与未做项
