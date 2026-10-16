@@ -2,7 +2,7 @@
 
 针对 Purpur / Paper / Folia 26.2+（已在 Purpur 26.3 / Java 25 实测）的聊天与行为管制插件（反服务器广告）。
 
-> **完整手册见 [`wiki/`](wiki/Home.md)**：安装与升级、[配置详解](wiki/配置详解.md)、[判定流程](wiki/判定流程.md)、[行为分类与老玩家](wiki/行为分类与老玩家.md)、[AI 审核](wiki/AI审核.md)、[命令与权限](wiki/命令与权限.md)、[记录与查询](wiki/记录与查询.md)、[兼容与 Folia](wiki/兼容与Folia.md)、[常见问题](wiki/常见问题.md)、[开发与发布](wiki/开发与发布.md)。
+> **完整手册见 [`wiki/`](wiki/Home.md)**（同一份内容也发布在 [GitHub Wiki](https://github.com/xingxing2024/AntiAd/wiki)）：安装与升级、[配置详解](wiki/配置详解.md)、[判定流程](wiki/判定流程.md)、[行为分类与老玩家](wiki/行为分类与老玩家.md)、[AI 审核](wiki/AI审核.md)、[命令与权限](wiki/命令与权限.md)、[记录与查询](wiki/记录与查询.md)、[兼容与 Folia](wiki/兼容与Folia.md)、[常见问题](wiki/常见问题.md)、[开发与发布](wiki/开发与发布.md)。
 > 这份 README 是快速上手；`FEATURES.md` 是功能清单；`wiki/` 是逐项说明。
 
 只盯**受管制玩家**的聊天。命中的消息**不删**：消息照常发出，但只有发送者自己看得到，其他玩家都不知道；管理员会收到通报。命中累计到阈值后封禁 **IP 与账号**。
