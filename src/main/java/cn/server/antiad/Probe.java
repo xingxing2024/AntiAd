@@ -115,16 +115,20 @@ public final class Probe {
         if (srv != null) {
             // _minecraft._tcp 记录只有 MC 客户端会查，存在基本就等于「这里开着 MC 服」。
             minecraft = true;
-            pingHost = srv.target();
-            pingPort = srv.port();
-            notes.append("SRV _minecraft._tcp → ").append(srv.target()).append(':').append(srv.port()).append("；");
+            // 玩家自己写了端口时，客户端会直接用那个端口连（不看 SRV），所以按消息里的端口探。
+            boolean explicitPort = port != 25565;
+            pingHost = explicitPort ? host : srv.target();
+            pingPort = explicitPort ? port : srv.port();
+            notes.append("SRV _minecraft._tcp → ").append(srv.target()).append(':').append(srv.port());
+            if (explicitPort) notes.append("（消息里写了端口 ").append(port).append("，按它连）");
+            notes.append("；");
         }
 
         Status status = status(pingHost, pingPort, deadline);
         if (status != null && status.portOpen() && status.version().isEmpty() && status.max() == 0 && status.motd().isEmpty()) {
             // 端口连得上但不回状态：多数是 enable-status=false，也可能只挡了探测。25565 上不会有别的东西，算作服务器。
             portOpen = true;
-            notes.append(pingPort).append(" 端口是开着的（连得上），但没回服务器状态 —— 对方多半关了 enable-status 或只挡了探测，仍然算作 Minecraft 服务器；");
+            notes.append(pingPort).append(" 端口上确实有服务在应答，但没回 Minecraft 状态 —— 对方多半关了 enable-status 或屏蔽了探测请求，仍然算作 Minecraft 服务器；");
         } else if (status != null) {
             minecraft = true;
             notes.append(pingPort).append(" 端口回应了 Minecraft 状态");
@@ -231,7 +235,18 @@ public final class Probe {
             out.flush();
 
             DataInputStream in = new DataInputStream(socket.getInputStream());
-            int length = readVarInt(in);
+            // 先看对方是不是"说了话"：真服务器即使关了 enable-status 也会回一个包；
+            // 而高防/云防火墙常常把所有端口的 TCP 连接都接住、然后一声不吭 —— 那种不算服务器。
+            int first = firstByte(in);
+            if (first < 0) return null;                       // 超时或直接断开：判定为端口无响应
+            int length = first & 0x7F, shift = 7;
+            while ((first & 0x80) != 0) {
+                first = in.read();
+                if (first < 0) return Status.OPEN_ONLY;
+                length |= (first & 0x7F) << shift;
+                shift += 7;
+                if (shift > 28) return Status.OPEN_ONLY;
+            }
             if (length <= 0 || length > MAX_STATUS) return Status.OPEN_ONLY;
             byte[] payload = new byte[length];
             in.readFully(payload);
@@ -241,10 +256,21 @@ public final class Probe {
             if (!json.contains("\"version\"") || !(json.contains("\"players\"") || json.contains("\"description\""))) return Status.OPEN_ONLY;
             return new Status(textOf(VERSION, json), number(ONLINE, json), number(MAX, json), clean(textOf(MOTD, json)), false);
         } catch (Exception e) {
-            // 连上了但没拿到状态：多半是 enable-status=false 或防火墙只挡了探测，端口本身是开着的。
+            // 有响应但读不下去（半包、乱码）：端口上确实有东西在说话，当作被屏蔽了状态的服。
             return Status.OPEN_ONLY;
         } finally {
             close(socket);
+        }
+    }
+
+    /** 读第一个字节；超时或对端直接断开都返回 -1（表示对方什么都没说）。 */
+    private static int firstByte(DataInputStream in) {
+        try {
+            return in.read();
+        } catch (java.net.SocketTimeoutException e) {
+            return -1;
+        } catch (Exception e) {
+            return -1;
         }
     }
 
@@ -392,19 +418,43 @@ public final class Probe {
         return value.isBlank() ? null : value;
     }
 
-    /** 消息里紧跟在该主机后面的端口（「mc.example.com:25567」），没写就用默认端口。 */
+    /** 紧跟主机后面的端口：「mc.example.com:47514」「host: 47514」都认。 */
+    private static final Pattern PORT_AFTER = Pattern.compile("\\s*:\\s*(\\d{1,5})");
+    /** 中文写法：「端口 47514」「端口号:47514」「reverse 47514」。只在紧跟主机的 40 个字内找。 */
+    private static final Pattern PORT_WORD = Pattern.compile("(?i)(?:端口号?|反向|port|reverse)\\s*[:：]?\\s*(\\d{2,5})");
+
+    /**
+     * 消息里紧跟在该主机后面的端口。支持 `host:47514`、`host: 47514`、`host 端口 47514` 这几种写法；
+     * 没写端口就返回默认 25565（这时如果服务端配了 SRV，{@link #investigate} 会用 SRV 指向的端口）。
+     */
     public static int portOf(String text, String host) {
-        if (text != null && host != null && !host.isBlank()) {
-            Matcher matcher = Pattern.compile(Pattern.quote(host) + ":(\\d{1,5})", Pattern.CASE_INSENSITIVE).matcher(text);
-            if (matcher.find()) {
-                try {
-                    int port = Integer.parseInt(matcher.group(1));
-                    if (port >= 1 && port <= 65535) return port;
-                } catch (NumberFormatException ignored) {
-                }
+        if (text == null || host == null || host.isBlank()) return 25565;
+        String lowerText = text.toLowerCase(Locale.ROOT);
+        String lowerHost = host.toLowerCase(Locale.ROOT);
+        int fallback = 0;
+        for (int at = lowerText.indexOf(lowerHost); at >= 0; at = lowerText.indexOf(lowerHost, at + 1)) {
+            String tail = text.substring(at + host.length());
+            Matcher plain = PORT_AFTER.matcher(tail);
+            if (plain.lookingAt()) {
+                int port = parsePort(plain.group(1));
+                if (port > 0) return port;
+            }
+            if (fallback == 0) {
+                String near = text.substring(at, Math.min(text.length(), at + host.length() + 40));
+                Matcher named = PORT_WORD.matcher(near);
+                if (named.find()) fallback = parsePort(named.group(1));
             }
         }
-        return 25565;
+        return fallback > 0 ? fallback : 25565;
+    }
+
+    private static int parsePort(String digits) {
+        try {
+            int port = Integer.parseInt(digits);
+            return port >= 1 && port <= 65535 ? port : 0;
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /** 逐个解析结果都必须是公网地址（防止拿插件去打内网）。 */

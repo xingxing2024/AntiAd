@@ -85,12 +85,12 @@ public final class ChatGuard implements Listener {
         if (!watched(plugin, player)) return;
         List<String> history = remember(player, text, ai);
 
-        // 跨消息拼接：把最近几条拼起来再查一次地址，对付把域名拆成多条发。
+        // 跨消息拼接：把最近几条拼起来再查一次地址，对付把域名拆成多条发。端口可能在前一条里，所以把拼条后的整段当文本。
         String combined = combineHit(history, text, settings);
         if (combined != null) {
             shadow(event, player);
             InetAddress address = address(player);
-            plugin.runFor(player, () -> handle(player, text, combined, null, address, "combine"));
+            plugin.runFor(player, () -> handle(player, combined, combined, null, address, "combine"));
             return;
         }
 
