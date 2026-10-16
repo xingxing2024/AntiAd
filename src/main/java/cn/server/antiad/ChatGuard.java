@@ -31,6 +31,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
  * 新玩家的入口管制：聊天（含 /me）、告示牌、铁砧改名、书与笔。
@@ -118,21 +119,32 @@ public final class ChatGuard implements Listener {
         List<String> hints = Detector.hints(text, settings.bannedWords, settings.aiTriggerWords);
         Hold hold = new Hold(player, event.renderer(), new LinkedHashSet<>(event.viewers()), event.message());
         event.setCancelled(true);
-        plugin.aiPool().submit(() -> {
-            Settings current = plugin.settings();
-            long start = System.currentTimeMillis();
-            // 送 AI 之前先把消息里的地址探一下：结论是"对方真的是台 MC 服"还是"只是个网站"，直接决定判定准确率。
-            String intel = probeIntel(text, current);
-            Ai.Verdict verdict = plugin.ai().judge(current, minutes(player),
-                    strikes.count(player.getUniqueId(), System.currentTimeMillis(), current.windowSeconds), hints, intel, history, text);
-            long cost = System.currentTimeMillis() - start;
-            plugin.recordUsage(verdict);
-            // AI 输出也写到后台，管理员能核对每一条判定（包括"不是广告"）。
-            plugin.getLogger().info("AI 审核 " + player.getName() + "：" + (verdict.ad() ? "是广告" : "不是广告")
-                    + "（理由：" + verdict.reason() + "；耗时 " + cost + "ms；tokens " + verdict.promptTokens() + "+" + verdict.completionTokens()
-                    + "；线索：" + (hints.isEmpty() ? "无" : String.join("、", hints)) + "；地址情报：" + intel + "）消息：" + text);
-            plugin.runFor(player, () -> deliver(hold, text, verdict));
-        });
+        try {
+            plugin.aiPool().submit(() -> {
+                aiJudge(player, text, hints, history, hold);
+            });
+        } catch (RejectedExecutionException e) {
+            // 队列满了（刷屏）：直接放行这条，别扣着不给玩家看，也不花这次 token。
+            event.setCancelled(false);
+            plugin.getLogger().info("AI 待审队列已满（" + AntiAdPlugin.AI_QUEUE_LIMIT + " 条），直接放行 " + player.getName() + " 的消息");
+        }
+    }
+
+    /** AI 审核的实际工作：先探地址情报，再交给模型判断，最后回到玩家线程处置。 */
+    private void aiJudge(Player player, String text, List<String> hints, List<String> history, Hold hold) {
+        Settings current = plugin.settings();
+        long start = System.currentTimeMillis();
+        // 送 AI 之前先把消息里的地址探一下：结论是"对方真的是台 MC 服"还是"只是个网站"，直接决定判定准确率。
+        String intel = probeIntel(text, current);
+        Ai.Verdict verdict = plugin.ai().judge(current, minutes(player),
+                strikes.count(player.getUniqueId(), System.currentTimeMillis(), current.windowSeconds), hints, intel, history, text);
+        long cost = System.currentTimeMillis() - start;
+        plugin.recordUsage(verdict);
+        // AI 输出也写到后台，管理员能核对每一条判定（包括"不是广告"）。
+        plugin.getLogger().info("AI 审核 " + player.getName() + "：" + (verdict.ad() ? "是广告" : "不是广告")
+                + "（理由：" + verdict.reason() + "；耗时 " + cost + "ms；tokens " + verdict.promptTokens() + "+" + verdict.completionTokens()
+                + "；线索：" + (hints.isEmpty() ? "无" : String.join("、", hints)) + "；地址情报：" + intel + "）消息：" + text);
+        plugin.runFor(player, () -> deliver(hold, text, verdict));
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)

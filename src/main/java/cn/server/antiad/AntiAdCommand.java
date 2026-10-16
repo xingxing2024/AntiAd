@@ -1,14 +1,20 @@
 package cn.server.antiad;
 
 import io.papermc.paper.ban.BanListType;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.Server;
 import org.bukkit.Statistic;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.permissions.Permission;
+import org.bukkit.permissions.PermissionAttachment;
+import org.bukkit.permissions.PermissionAttachmentInfo;
+import org.bukkit.plugin.Plugin;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -21,6 +27,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -64,13 +71,13 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(Messages.text("&aAntiAd 配置已重载（记录库换文件、AI 并发数需要重启）。"));
             }
             case "test" -> test(sender, args);
-            case "check" -> check(sender, args);
+            case "check" -> checkAsync(sender, args);
             case "ban" -> ban(sender, args);
             case "unban" -> unban(sender, args);
-            case "behavior" -> behavior(sender, args);
+            case "behavior" -> query(sender, out -> behavior(out, args));
             case "ai" -> ai(sender, args);
-            case "cost" -> cost(sender);
-            case "records" -> records(sender, args);
+            case "cost" -> query(sender, out -> cost(out));
+            case "records" -> query(sender, out -> records(out, args));
             default -> {
                 sender.sendMessage(Messages.text("&6AntiAd &7命令（&f/ad&7 或 &f/antiad&7，短写见最后一行）："));
                 sender.sendMessage(Messages.text("&e/antiad check <玩家> &7- 查看该玩家是否在检查范围内"));
@@ -320,13 +327,63 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
         };
     }
 
-    /** 查看某个玩家现在是否在检查范围内，以及已经累计到第几次。 */
-    private void check(CommandSender sender, String[] args) {
+    /**
+     * 命令里要查库的部分统一走这里：在异步线程查完，再回到主线程把消息发出去，
+     * 主线程一秒都不等 SQLite（服务器正在批量写入画像、或别的插件在备份锁库时尤其明显）。
+     */
+    private void query(CommandSender sender, java.util.function.Consumer<CommandSender> body) {
+        plugin.runAsync(() -> {
+            Collector collector = new Collector();
+            try {
+                body.accept(collector);
+            } catch (Throwable error) {
+                plugin.getLogger().warning("命令执行出错: " + error);
+                collector.sendMessage(Messages.text("&c命令执行出错：" + error.getClass().getSimpleName()));
+            }
+            List<Component> lines = collector.lines;
+            plugin.runGlobal(() -> {
+                for (Component line : lines) sender.sendMessage(line);
+            });
+        });
+    }
+
+    /** 只负责攒消息的假 sender：命令体照常 sendMessage，真正的发送等查完回到主线程统一做。 */
+    private static final class Collector implements CommandSender {
+        private final List<Component> lines = new ArrayList<>();
+
+        @Override public void sendMessage(String message) { lines.add(Messages.text(message)); }
+        @Override public void sendMessage(String... messages) { for (String message : messages) sendMessage(message); }
+        @Override public void sendMessage(UUID sender, String message) { sendMessage(message); }
+        @Override public void sendMessage(UUID sender, String... messages) { sendMessage(messages); }
+        @Override public void sendMessage(Component message) { lines.add(message); }
+        @Override public String getName() { return "AntiAd"; }
+        @Override public Component name() { return Component.text("AntiAd"); }
+        @Override public Spigot spigot() { return null; }
+        @Override public Server getServer() { return Bukkit.getServer(); }
+        @Override public boolean isPermissionSet(String name) { return false; }
+        @Override public boolean isPermissionSet(Permission perm) { return false; }
+        @Override public boolean hasPermission(String name) { return true; }
+        @Override public boolean hasPermission(Permission perm) { return true; }
+        @Override public PermissionAttachment addAttachment(Plugin plugin, String name, boolean value) { return null; }
+        @Override public PermissionAttachment addAttachment(Plugin plugin) { return null; }
+        @Override public PermissionAttachment addAttachment(Plugin plugin, String name, boolean value, int ticks) { return null; }
+        @Override public PermissionAttachment addAttachment(Plugin plugin, int ticks) { return null; }
+        @Override public void removeAttachment(PermissionAttachment attachment) { }
+        @Override public void recalculatePermissions() { }
+        @Override public Set<PermissionAttachmentInfo> getEffectivePermissions() { return Set.of(); }
+        @Override public boolean isOp() { return false; }
+        @Override public void setOp(boolean value) { }
+    }
+
+    /**
+     * `/antiad check`：在线时长、IP、封禁状态这些玩家数据必须在主线程（玩家的线程）上先取好，
+     * 取完再去异步线程查库 —— 不然就是在别人的线程上读玩家数据了。
+     */
+    private void checkAsync(CommandSender sender, String[] args) {
         if (args.length < 2) {
             sender.sendMessage(Messages.text("&c用法：/antiad check <玩家>"));
             return;
         }
-        Settings settings = plugin.settings();
         String name = args[1];
         Player online = Bukkit.getPlayerExact(name);
         OfflinePlayer target = resolve(name);
@@ -334,8 +391,17 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage(Messages.text("&7找不到玩家 &f" + name + "&7：只查在线玩家和本服缓存过的玩家。"));
             return;
         }
-        UUID id = target.getUniqueId();
         long first = target.getFirstPlayed();
+        long ticks = online == null ? 0 : online.getStatistic(Statistic.PLAY_ONE_MINUTE);
+        InetSocketAddress socket = online == null ? null : online.getAddress();
+        boolean banned = online != null && online.isBanned();
+        query(sender, out -> check(out, target, online, first, ticks, socket, banned));
+    }
+
+    /** 查看某个玩家现在是否在检查范围内，以及已经累计到第几次（查库部分在异步线程）。 */
+    private void check(CommandSender sender, OfflinePlayer target, Player online, long first, long ticks, InetSocketAddress socket, boolean banned) {
+        Settings settings = plugin.settings();
+        UUID id = target.getUniqueId();
         long minutes = first <= 0 ? -1 : (System.currentTimeMillis() - first) / 60_000L;
         boolean bypass = !settings.bypassPermission.isEmpty() && online != null && online.hasPermission(settings.bypassPermission);
         boolean whitelisted = settings.playerAllowed(id, target.getName());
@@ -345,9 +411,7 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
         if (whitelisted) sender.sendMessage(Messages.text("&a玩家白名单：是 &7（whitelist.players 里写了这个名字/UUID，完全免检）"));
         else if (bypass && online != null) sender.sendMessage(Messages.text("&a拥有绕过权限 &f" + settings.bypassPermission + "&7：完全免检"));
         if (settings.behaviorEnabled && online != null) {
-            long ticks = online.getStatistic(Statistic.PLAY_ONE_MINUTE);
-            int violations = online != null ? plugin.behavior().violations(id)
-                    : plugin.violations(id, System.currentTimeMillis() - settings.veteranCleanHours * 3600_000L);
+            int violations = plugin.behavior().violations(id);
             boolean veteran = ChatGuard.veteran(plugin, online);
             sender.sendMessage(Messages.text("&7老玩家判定：累计 &f" + String.format(Locale.ROOT, "%.1f", ticks / 72000.0) + " &7小时（需 > &f"
                     + settings.veteranPlayHours + "&7）、行为分 &f" + plugin.behavior().score(id) + " &7（需 ≥ &f" + settings.veteranMinScore
@@ -377,10 +441,9 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
             if (profile.banned) sender.sendMessage(Messages.text("&c这个号被本插件封过，永久按广告号处理。"));
         }
         if (online != null) {
-            InetSocketAddress socket = online.getAddress();
             boolean ipBanned = socket != null && Bukkit.getBanList(BanListType.IP).isBanned(socket.getAddress());
             sender.sendMessage(Messages.text("&7IP：&f" + (socket == null ? "未知" : socket.getAddress().getHostAddress())
-                    + "&7；账号封禁：" + (online.isBanned() ? "&c是" : "&a否")
+                    + "&7；账号封禁：" + (banned ? "&c是" : "&a否")
                     + "&7；IP 封禁：" + (ipBanned ? "&c是" : "&a否")));
         }
         sender.sendMessage(Messages.text("&7AI 审核：" + (settings.aiEnabled && !settings.aiKey.isBlank()

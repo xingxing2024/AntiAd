@@ -47,7 +47,7 @@
 2. 填进 `plugins/AntiAd/config.yml` 的 `ai.api-key`，`/antiad reload` 生效。`api-key` 留空 = AI 自动不启用，聊天完全不受影响。
 3. 也可以换成任意 OpenAI 兼容接口：本地 Ollama / LM Studio（完全免费离线）、DeepSeek（按量付费）、硅基流动、OpenRouter `:free` —— 现成地址都写在配置注释里。
 
-- 速度优先：默认 `timeout-seconds: 2`，AI 调用走插件自己的线程池（`ai.max-concurrent` 默认 3，防止免费额度被限流，改后需重启）；超时、限流（429）、报错一律按 `fail-open` 放行。用 DeepSeek 这类首字延迟 1~3 秒的服务时，把 `timeout-seconds` 调到 4~6，否则会频繁超时=放行。
+- 速度优先：默认 `timeout-seconds: 2`，AI 调用走插件自己的线程池（`ai.max-concurrent` 默认 3，防止免费额度被限流，改后需重启）；**待审队列上限 32 条，超出的消息直接放行（fail-open）**，所以刷屏时消息不会一直排队、也不会白烧 token；超时、限流（429）、报错一律按 `fail-open` 放行。用 DeepSeek 这类首字延迟 1~3 秒的服务时，把 `timeout-seconds` 调到 4~6，否则会频繁超时=放行。
 - 免费额度高峰会变慢或限流，这时命中判定等于“放行”，IP/域名/违禁词规则仍在兜底 —— 宁可漏也不误伤。
 - 只审规则没命中的消息，且只审新玩家窗口内的消息：老玩家、已被规则命中的消息不会消耗 token。
 - `prompt` 可改，占位符：`{self}`、`{minutes}`、`{hits}`、`{words}`（命中的敏感词线索）、`{probe}`（地址情报）、`{context}`、`{message}`；模型必须回 `{"ad":true/false,"reason":"..."}`（解析时按这个形状找，回显提示词不算判定）。
@@ -146,7 +146,7 @@
 ## 安装
 
 1. 服务器 Java **21 或更新**（1.21.x 服务端用 Java 21，26.x 用 Java 25 —— 插件按 Java 21 编译，两边都能跑）。
-2. 把 `target/AntiAd-1.0.12.jar`（约 110 KB）放进 `plugins`。
+2. 把 `target/AntiAd-1.0.13.jar`（约 110 KB）放进 `plugins`。
 3. 首次启动会自动从**阿里云镜像**下载 SQLite 驱动到服务端根目录的 `libraries/org/xerial/sqlite-jdbc/`（想换源：启动参数 `-Dorg.bukkit.plugin.java.LibraryLoader.centralURL=<仓库>`；**无外网**就手动下 `https://maven.aliyun.com/repository/public/org/xerial/sqlite-jdbc/3.51.0.0/sqlite-jdbc-3.51.0.0.jar` 放进那个目录）。
 4. 启动一次后编辑 `plugins/AntiAd/config.yml`（把 `whitelist.domains` / `whitelist.ips` 改成自己服务器的域名、入口 IP、自己的 QQ 群号，`punish.contact` 改成你的解封联系方式，要用 AI 再填 `ai.api-key`），然后 `/antiad reload`。
 

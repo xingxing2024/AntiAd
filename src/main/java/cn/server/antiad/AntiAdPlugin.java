@@ -25,10 +25,16 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 public final class AntiAdPlugin extends JavaPlugin {
+    /** AI 待审队列上限：超出就直接放行那条消息（fail-open），不让玩家一直等。 */
+    static final int AI_QUEUE_LIMIT = 32;
+
     private Settings settings;
     private Store store;
     private Ai ai;
@@ -48,7 +54,10 @@ public final class AntiAdPlugin extends JavaPlugin {
         ai = new Ai(getLogger());
         // AI 审核走自己的线程池，不和服务器其他异步任务抢线程，结论更快回来。
         // 并发数可配（免费接口有 QPS 限流，调小可减少 429），改这里需要重启。
-        aiPool = Executors.newFixedThreadPool(settings.aiConcurrent, runnable -> {
+        // 队列有上限：满了就抛 RejectedExecutionException，由 ChatGuard 直接放行那条消息（fail-open）——
+        // 队列无上限的话，刷屏时消息会一直排队，发送者等一分钟都看不到自己发的字。
+        aiPool = new ThreadPoolExecutor(settings.aiConcurrent, settings.aiConcurrent, 30L, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(AI_QUEUE_LIMIT), runnable -> {
             Thread thread = new Thread(runnable, "AntiAd-AI");
             thread.setDaemon(true);
             return thread;

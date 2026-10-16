@@ -154,7 +154,7 @@ SQLite `plugins/AntiAd/antiad.db`：
 ## 9. 兼容与集成
 
 - 服务端：**Paper / Purpur / Folia 1.21.1 ~ 26.x**（一份 jar；`folia-supported: true`，全部用区域化调度 `GlobalRegionScheduler` / `EntityScheduler`，调度同样的代码在 Paper 上落到主线程）。已在 **Folia 26.2-7** 实测：插件正常加载启用、周期任务在 `Folia Region Scheduler Thread` 执行、命令全部可用。
-- 线程模型：聊天事件是异步的，处理器只读内存缓存（老玩家判定所需的在线时长/违规次数每分钟在玩家线程上刷新）；所有对玩家的动作（补发消息、踢出、封禁、通报）都通过 `EntityScheduler` 在该玩家所属区域线程执行；SQLite 写入用同步方法保护。
+- 线程模型：聊天事件是异步的，处理器只读内存缓存（老玩家判定所需的在线时长/违规次数每分钟在玩家线程上刷新）；所有对玩家的动作（补发消息、踢出、封禁、通报）都通过 `EntityScheduler` 在该玩家所属区域线程执行；**所有数据库读写都在异步线程**（包括 `/antiad check|records|cost|behavior` 这些命令，主线程一秒都不等 SQLite）；AI 待审队列上限 32 条，超出直接放行。
 - 同时兼容装了 **TrChat** 这类接管聊天的插件（实测 A/B：旧实现会被 TrChat 绕过，新实现 0 次广播）。
 - 记录库需要写 `plugins/AntiAd/`；AI 需要出网（本地 Ollama 可离线）。
 - 无 Vault、无 PlaceholderAPI、无 ProtocolLib 依赖；jar 本体约 **130 KB**（只 shade 了 bStats，已重定位到 `cn.server.antiad.bstats`，不会和其他插件冲突）。SQLite 驱动由插件自带的 Paper 加载器 `AntiAdLoader` 拉取：**优先阿里云公共仓库**，官方源兜底，下载到 `libraries/org/xerial/sqlite-jdbc/`（无外网时手动放进去，或改 `-Dorg.bukkit.plugin.java.LibraryLoader.centralURL`）。
