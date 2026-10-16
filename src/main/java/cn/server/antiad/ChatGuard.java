@@ -352,11 +352,11 @@ public final class ChatGuard implements Listener {
 
     /**
      * 这次地址命中算不算"确认过的广告"：没开探测、或配置里不要求确认时保持老行为；
-     * 否则必须探测确认对方是活的 Minecraft 服务器（SRV 记录或协议有回应）。
+     * 否则必须确认对方是 MC 服务器 —— SRV 记录、状态回应、或者 25565 端口开着只是屏蔽了状态请求（enable-status=false / 只挡探测）。
      */
     static boolean hardHit(Settings settings, Probe.Result result) {
         if (!settings.probeEnabled || !settings.probeConfirmRequired) return true;
-        return result.minecraft();
+        return result.minecraft() || result.portOpen();
     }
 
     /** 探测回来了：确认过的计入封禁次数并可能封禁；没确认的只隐藏 + 通报 + 扣分（仍然是"只给本人看"）。 */

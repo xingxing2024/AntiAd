@@ -38,14 +38,16 @@ class CommandTest {
 
     @Test void 是否计入封禁次数由探测结论决定() {
         Settings settings = new Settings();
-        Probe.Result live = new Probe.Result(true, true, "25565 端口回应了 Minecraft 状态");
-        Probe.Result dead = new Probe.Result(true, false, "25565 端口无响应；首页标题：某网站（不像服务器站点）");
+        Probe.Result live = new Probe.Result(true, true, false, "25565 端口回应了 Minecraft 状态");
+        Probe.Result blocked = new Probe.Result(true, false, true, "25565 端口是开着的（连得上），但没回服务器状态");
+        Probe.Result dead = new Probe.Result(true, false, false, "25565 端口无响应；首页标题：某网站（不像服务器站点）");
         Probe.Result none = Probe.Result.NONE;
 
         settings.probeEnabled = true;
         settings.probeConfirmRequired = true;
-        assertTrue(ChatGuard.hardHit(settings, live), "确认是活的服务器 → 计入");
-        assertFalse(ChatGuard.hardHit(settings, dead), "探测到不是服务器 → 不计入（不封号）");
+        assertTrue(ChatGuard.hardHit(settings, live), "状态回应 → 计入");
+        assertTrue(ChatGuard.hardHit(settings, blocked), "端口开着只是屏蔽了状态（enable-status=false）→ 也计入");
+        assertFalse(ChatGuard.hardHit(settings, dead), "端口无响应/只是网站 → 不计入（不封号）");
         assertFalse(ChatGuard.hardHit(settings, none), "域名解析不了 → 不计入");
 
         settings.probeConfirmRequired = false;   // 关掉确认要求 = 老行为

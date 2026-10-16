@@ -35,6 +35,7 @@ class ProbeTest {
     private static Settings settings(boolean fetchTitle) {
         Settings s = new Settings();
         s.probeEnabled = true;
+        s.probeConfirmRequired = true;
         s.probeTimeoutMs = 3000;
         s.probeCacheSeconds = 600;
         s.probeFetchTitle = fetchTitle;
@@ -101,12 +102,14 @@ class ProbeTest {
         assertFalse(result.text().contains("§"));
     }
 
-    @Test void 垃圾响应不算服务器() throws Exception {
-        int port = fakeServer(null);
+    @Test void 状态被屏蔽但端口开着也算服务器() throws Exception {
+        int port = fakeServer(null);   // 连得上，但回的是垃圾数据
         Probe.Result result = new Probe(true).lookup("127.0.0.1", port, settings(false));
         assertTrue(result.probed());
         assertFalse(result.minecraft());
-        assertTrue(result.text().contains("无响应"), result.text());
+        assertTrue(result.portOpen(), "端口连得上但没回状态 → 算作服务器（enable-status=false / 只挡探测）");
+        assertTrue(result.text().contains("开着的"), result.text());
+        assertTrue(ChatGuard.hardHit(settings(true), result), "这种也要计入封禁次数");
     }
 
     @Test void 端口没人听时给的是没响应() throws Exception {
@@ -114,6 +117,7 @@ class ProbeTest {
         Probe.Result result = new Probe(true).lookup("127.0.0.1", port, settings(false));
         assertTrue(result.probed());
         assertFalse(result.minecraft());
+        assertFalse(result.portOpen());
     }
 
     @Test void 同一个地址走缓存不重复探测() throws Exception {

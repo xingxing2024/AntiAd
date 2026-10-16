@@ -39,9 +39,9 @@ import java.util.regex.Pattern;
  * 所有方法都会阻塞，只能在异步线程调用。
  */
 public final class Probe {
-    /** probed = 是否真的探测过；minecraft = 是否确认是 MC 服务器；text = 一行中文说明。 */
-    public record Result(boolean probed, boolean minecraft, String text) {
-        static final Result NONE = new Result(false, false, "");
+    /** probed = 是否真的探测过；minecraft = 确认是 MC 服务器；portOpen = 25565 连得上但没回状态（强线索）；text = 一行中文说明。 */
+    public record Result(boolean probed, boolean minecraft, boolean portOpen, String text) {
+        static final Result NONE = new Result(false, false, false, "");
     }
 
     record Srv(int priority, int weight, String target, int port) {}
@@ -103,6 +103,7 @@ public final class Probe {
 
         StringBuilder notes = new StringBuilder();
         boolean minecraft = false;
+        boolean portOpen = false;
         int pingPort = port;
         String pingHost = host;
 
@@ -120,7 +121,11 @@ public final class Probe {
         }
 
         Status status = status(pingHost, pingPort, deadline);
-        if (status != null) {
+        if (status != null && status.portOpen() && status.version().isEmpty() && status.max() == 0 && status.motd().isEmpty()) {
+            // 端口连得上但不回状态：多数是 enable-status=false，也可能只挡了探测。25565 上不会有别的东西，算作服务器。
+            portOpen = true;
+            notes.append(pingPort).append(" 端口是开着的（连得上），但没回服务器状态 —— 对方多半关了 enable-status 或只挡了探测，仍然算作 Minecraft 服务器；");
+        } else if (status != null) {
             minecraft = true;
             notes.append(pingPort).append(" 端口回应了 Minecraft 状态");
             if (!status.version().isEmpty()) notes.append("（版本 ").append(status.version());
@@ -133,7 +138,7 @@ public final class Probe {
         }
 
         // 已经确认是服务器就不用网页标题了；没确认才把它当线索写进去。
-        if (!minecraft && titleTask != null) {
+        if (!minecraft && !portOpen && titleTask != null) {
             String title = join(titleTask, deadline);
             if (title != null && !title.isBlank()) {
                 notes.append("首页标题：").append(title);
@@ -144,7 +149,7 @@ public final class Probe {
 
         String text = notes.toString();
         if (text.isEmpty()) text = "没有可用信息；";
-        return new Result(true, minecraft, shorten(text));
+        return new Result(true, minecraft, portOpen, shorten(text));
     }
 
     // ---------- SRV ----------
@@ -197,13 +202,22 @@ public final class Probe {
 
     // ---------- 服务器列表协议（SLP） ----------
 
-    record Status(String version, int online, int max, String motd) {}
+    record Status(String version, int online, int max, String motd, boolean portOpen) {
+        /** 连上了端口、但没拿到服务器状态（开了 enable-status=false 或屏蔽了探测）。 */
+        static final Status OPEN_ONLY = new Status("", 0, 0, "", true);
+    }
 
-    /** 握手 + status 请求；不是 Minecraft 服务器（或没响应）返回 null。 */
+    /** 握手 + status 请求。连不上返回 null；连上了但没状态（被屏蔽）返回 {@link Status#OPEN_ONLY}。 */
     static Status status(String host, int port, long deadline) {
-        try (Socket socket = new Socket()) {
+        Socket socket = new Socket();
+        try {
             socket.connect(new InetSocketAddress(host, port), (int) remaining(deadline, 1200));
             socket.setSoTimeout((int) remaining(deadline, 1200));
+        } catch (Exception e) {
+            close(socket);
+            return null;   // 端口连不上：没人听、被防火墙挡了、或者根本不在线
+        }
+        try {
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
 
             ByteArrayOutputStream handshake = new ByteArrayOutputStream();
@@ -218,16 +232,26 @@ public final class Probe {
 
             DataInputStream in = new DataInputStream(socket.getInputStream());
             int length = readVarInt(in);
-            if (length <= 0 || length > MAX_STATUS) return null;
+            if (length <= 0 || length > MAX_STATUS) return Status.OPEN_ONLY;
             byte[] payload = new byte[length];
             in.readFully(payload);
             DataInputStream packet = new DataInputStream(new ByteArrayInputStream(payload));
-            if (readVarInt(packet) != 0x00) return null;
+            if (readVarInt(packet) != 0x00) return Status.OPEN_ONLY;
             String json = readString(packet);
-            if (!json.contains("\"version\"") || !(json.contains("\"players\"") || json.contains("\"description\""))) return null;
-            return new Status(textOf(VERSION, json), number(ONLINE, json), number(MAX, json), clean(textOf(MOTD, json)));
+            if (!json.contains("\"version\"") || !(json.contains("\"players\"") || json.contains("\"description\""))) return Status.OPEN_ONLY;
+            return new Status(textOf(VERSION, json), number(ONLINE, json), number(MAX, json), clean(textOf(MOTD, json)), false);
         } catch (Exception e) {
-            return null;
+            // 连上了但没拿到状态：多半是 enable-status=false 或防火墙只挡了探测，端口本身是开着的。
+            return Status.OPEN_ONLY;
+        } finally {
+            close(socket);
+        }
+    }
+
+    private static void close(Socket socket) {
+        try {
+            socket.close();
+        } catch (Exception ignored) {
         }
     }
 
