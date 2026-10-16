@@ -5,6 +5,7 @@ api-version: '${bukkit.api.version}'
 folia-supported: true
 description: 广告与违规内容管制（行为分类 + 结构规则 + 可选 AI），支持 Folia 区域化调度
 author: ServerTools
+website: https://github.com/xingxing2024/AntiAd
 # SQLite 驱动不打进 jar（否则要带上 23 个平台的原生库，12MB），改由下面的加载器在首次启动时拉取到
 # 服务端根目录的 libraries/ 里；加载器优先走国内镜像（阿里云），官方源只作兜底。详见 wiki 的「安装与升级」。
 paper-plugin-loader: cn.server.antiad.AntiAdLoader
