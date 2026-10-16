@@ -39,7 +39,7 @@
 
 结论有三个用途：① 作为 `{probe}` 线索进 AI 提示词；② 命中地址时给管理员补一条通报；③ **决定这次命中算不算封禁次数** —— 有 SRV 记录、状态有回应、或"端口有服务在应答只是不回状态"（`enable-status=false`／屏蔽探测，玩家照样能进）才算确认；随手打一个不存在的网址只会被隐藏 + 轻扣分，不会累计到封号（`probe.confirm-required: false` 可关掉这个确认）。
 
-端口不一定是 25565：消息里写了就按消息里的探（`host:47514`、`host: 47514`、`host 端口 47514` 都认），没写就查 `_minecraft._tcp` SRV 记录并按它指向的端口探，都没有才用 25565。只探**公网地址**（回环/内网/CGNAT/组播一律拒绝，不当内网扫描器），全异步、有缓存、有超时预算，可 `probe.enabled: false` 关掉。
+端口不一定是 25565：消息里写了就按消息里的探（`host:47514`、`host: 47514`、`host 端口 47514` 都认），没写就查 `_minecraft._tcp` SRV 记录并按它指向的端口探，都没有才用 25565；**只有 SRV、没有 A 记录的域名**（`play.example.cn` 这种）也认（先查 SRV，再对 SRV 指向的主机做公网校验）。只探**公网地址**（回环/内网/CGNAT/组播一律拒绝，不当内网扫描器），全异步、有缓存、有超时预算，可 `probe.enabled: false` 关掉。
 
 ## AI 审核（默认接智谱 GLM-4-Flash，免费）
 
@@ -137,7 +137,7 @@
 ## 安装
 
 1. 服务器 Java **21 或更新**（1.21.x 服务端用 Java 21，26.x 用 Java 25 —— 插件按 Java 21 编译，两边都能跑）。
-2. 把 `target/AntiAd-1.0.8.jar`（约 110 KB）放进 `plugins`。
+2. 把 `target/AntiAd-1.0.9.jar`（约 110 KB）放进 `plugins`。
 3. 首次启动会自动从**阿里云镜像**下载 SQLite 驱动到服务端根目录的 `libraries/org/xerial/sqlite-jdbc/`（想换源：启动参数 `-Dorg.bukkit.plugin.java.LibraryLoader.centralURL=<仓库>`；**无外网**就手动下 `https://maven.aliyun.com/repository/public/org/xerial/sqlite-jdbc/3.51.0.0/sqlite-jdbc-3.51.0.0.jar` 放进那个目录）。
 4. 启动一次后编辑 `plugins/AntiAd/config.yml`（把 `whitelist.domains` / `whitelist.ips` 改成自己服务器的域名、入口 IP、自己的 QQ 群号，`punish.contact` 改成你的解封联系方式，要用 AI 再填 `ai.api-key`），然后 `/antiad reload`。
 
