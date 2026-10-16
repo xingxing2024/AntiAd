@@ -91,7 +91,7 @@
 - 本项目为**原创实现**，未复制任何其他插件的代码；文档中提到的 TrChat、fakeplayer、Vault、PlaceholderAPI、ProtocolLib、bStats 等仅为兼容性说明或测试环境，与本项目无隶属或衍生关系。
 - 第三方依赖（随包分发，遵循各自许可）：
   - [bStats](https://bstats.org)（org.bstats，MIT，已重定位到 `cn.server.antiad.bstats`）
-- 运行时依赖：SQLite 驱动 [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)（org.xerial，Apache-2.0）**不打进 jar**，由服务端按 `plugin.yml` 里的 `libraries` 在首次启动时自动下载（详见 [安装](wiki/安装与升级.md)）。
+- 运行时依赖：SQLite 驱动 [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)（org.xerial，Apache-2.0）**不打进 jar**，由插件自带的 Paper 加载器 `AntiAdLoader` 在首次启动时从**阿里云公共仓库**下载（官方源只作兜底），详见 [安装](wiki/安装与升级.md)。
 - 内置数据：`tlds.txt` 取自已公开的 IANA 根区后缀（另做了筛选），`trusted-domains.txt` 为自行整理。
 
 ## 记录
@@ -123,8 +123,8 @@
 ## 安装
 
 1. 服务器 Java 25。
-2. 把 `target/AntiAd-1.0.1.jar`（约 110 KB）放进 `plugins`。
-3. 首次启动会自动下载 SQLite 驱动到服务端根目录的 `libraries/org/xerial/sqlite-jdbc/`（需要外网；**无外网**的话手动把 `sqlite-jdbc-3.51.0.0.jar` 放到那个目录里即可）。
+2. 把 `target/AntiAd-1.0.2.jar`（约 110 KB）放进 `plugins`。
+3. 首次启动会自动从**阿里云镜像**下载 SQLite 驱动到服务端根目录的 `libraries/org/xerial/sqlite-jdbc/`（想换源：启动参数 `-Dorg.bukkit.plugin.java.LibraryLoader.centralURL=<仓库>`；**无外网**就手动下 `https://maven.aliyun.com/repository/public/org/xerial/sqlite-jdbc/3.51.0.0/sqlite-jdbc-3.51.0.0.jar` 放进那个目录）。
 4. 启动一次后编辑 `plugins/AntiAd/config.yml`（把 `whitelist.domains` / `whitelist.ips` 改成自己服务器的域名、入口 IP、自己的 QQ 群号，`punish.contact` 改成你的解封联系方式，要用 AI 再填 `ai.api-key`），然后 `/antiad reload`。
 
 ## 构建与测试
