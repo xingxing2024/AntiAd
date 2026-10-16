@@ -320,7 +320,7 @@ public final class ChatGuard implements Listener {
         refire.put(player.getUniqueId(), text);
     }
 
-    /** 主线程执行：写记录、通报管理员，广告命中够阈值就封禁。 */
+    /** 主线程执行：写记录、通报管理员。规则命中的地址要等一次探测确认 —— 确认是活的 MC 服务器才计入封禁次数（防止随手打一个不存在的网址被累计封号）。 */
     private void handle(Player player, String text, String match, String word, InetAddress address, String kind) {
         Settings settings = plugin.settings();
         String ip = address == null ? null : address.getHostAddress();
@@ -331,14 +331,53 @@ public final class ChatGuard implements Listener {
             plugin.notifyStaff("&e" + player.getName() + " &7的消息含违禁词（&f" + word + "&7），已仅本人可见：&f" + text);
             return;
         }
-        int threshold = plugin.behavior().threshold(player);
-        int count = strikes.hit(player.getUniqueId(), System.currentTimeMillis(), settings.windowSeconds);
+        // 扣分在 finish 里按结论给：确认是服务器 = 广告命中扣分，没确认 = 只按轻度扣分。
+        // AI 判定为广告的走语义结论（AI 已经看过探测结论），不再等探测；规则命中的地址才需要确认。
+        if ("ai".equals(kind) || !settings.probeEnabled || !settings.probeConfirmRequired) {
+            finish(player, address, text, match, ip, kind, Probe.Result.NONE, true);
+            return;
+        }
+        String host = Probe.hostOf(match);
+        if (host == null) {
+            finish(player, address, text, match, ip, kind, Probe.Result.NONE, true);
+            return;
+        }
+        int port = Probe.portOf(Detector.normalize(text), host);
+        plugin.runAsync(() -> {
+            Probe.Result result = probes.lookup(host, port, settings);
+            boolean hard = hardHit(settings, result);
+            plugin.runFor(player, () -> finish(player, address, text, match, ip, kind, result, hard));
+        });
+    }
+
+    /**
+     * 这次地址命中算不算"确认过的广告"：没开探测、或配置里不要求确认时保持老行为；
+     * 否则必须探测确认对方是活的 Minecraft 服务器（SRV 记录或协议有回应）。
+     */
+    static boolean hardHit(Settings settings, Probe.Result result) {
+        if (!settings.probeEnabled || !settings.probeConfirmRequired) return true;
+        return result.minecraft();
+    }
+
+    /** 探测回来了：确认过的计入封禁次数并可能封禁；没确认的只隐藏 + 通报 + 扣分（仍然是"只给本人看"）。 */
+    private void finish(Player player, InetAddress address, String text, String match, String ip, String kind, Probe.Result result, boolean hard) {
+        Settings settings = plugin.settings();
+        if (!hard) {
+            // action=soft：记录库里把这类命中从"封禁次数"和"老玩家判定"里排除掉，但管理员仍然查得到。
+            plugin.behavior().penalty(player, false);
+            plugin.record(player, ip, kind, match, text, "soft");
+            plugin.notifyStaff("&e" + player.getName() + " &7消息里有地址（&f" + match + "&7），但探测不到活的 MC 服务器"
+                    + (result.probed() ? "（&f" + result.text() + "&7）" : "（域名解析不了或探测超时）")
+                    + "&7：只隐藏、不计入封禁次数。");
+            return;
+        }
         plugin.behavior().penalty(player, true);
         plugin.behavior().countViolation(player);
+        int threshold = plugin.behavior().threshold(player);
+        int count = strikes.hit(player.getUniqueId(), System.currentTimeMillis(), settings.windowSeconds);
         plugin.record(player, ip, kind, match, text, "hidden");
+        if (result.probed()) plugin.notifyStaff("&7地址情报（&f" + match + "&7）：&f" + result.text());
         plugin.notifyStaff("&e" + player.getName() + " &7对话命中广告（&f" + match + "&7，" + count + "/" + threshold + "），已仅本人可见");
-        // 顺手探一下这个地址是不是真的 MC 服务器，结论出来后再补一条通报（异步、带缓存、不阻塞玩家线程）。
-        probeAddress(text, match);
         if (count < threshold || address == null) return;
         strikes.clear(player.getUniqueId());
         plugin.behavior().markBanned(player);
@@ -349,20 +388,6 @@ public final class ChatGuard implements Listener {
         plugin.ban(player.getUniqueId(), player.getName(), address, reason, expires);
         player.kick(Messages.fill(settings.kickMessage, "{match}", match, "{contact}", settings.contact));
         plugin.notifyStaff("&c" + player.getName() + " &7（&f" + ip + "&7）因宣传服务器广告被封禁 IP 与账号：" + match);
-    }
-
-    /** 地址情报：异步探测 + 通报（结果只作为线索，不影响已经做出的处置）。 */
-    private void probeAddress(String text, String match) {
-        if (!plugin.settings().probeEnabled || match == null) return;
-        String host = Probe.hostOf(match);
-        if (host == null) return;
-        int port = Probe.portOf(Detector.normalize(text), host);
-        plugin.runAsync(() -> {
-            Probe.Result result = probes.lookup(host, port, plugin.settings());
-            if (!result.probed()) return;
-            plugin.runGlobal(() -> plugin.notifyStaff("&7地址情报（&f" + host + ":" + port + "&7）：&f" + result.text()
-                    + (result.minecraft() ? "" : "&8（也可能只是网站或屏蔽了探测）")));
-        });
     }
 
     /** 送给 AI 的地址情报：消息里的地址逐个探测（最多两个），拼成一行；没地址/关掉了会说清楚。 */
