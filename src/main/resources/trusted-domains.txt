@@ -1,0 +1,51 @@
+# 受信任站点：命中这些域名一律不算广告（既不隐藏也不累计、不封禁）。
+# 本文件为自行整理，一行一个、小写、匹配子域名；管理员自己的站点写在 config.yml 的 whitelist.domains 里。
+# 视频与社交
+bilibili.com
+b23.tv
+youtube.com
+youtu.be
+douyin.com
+kuaishou.com
+weibo.com
+zhihu.com
+tieba.baidu.com
+baidu.com
+twitter.com
+x.com
+facebook.com
+instagram.com
+tiktok.com
+discord.com
+discord.gg
+qq.com
+# 游戏资源与社区
+minecraft.net
+minecraft.wiki
+minecraftforge.net
+neoforged.net
+fabricmc.net
+spigotmc.org
+bukkit.org
+papermc.io
+purpurmc.org
+optifine.net
+curseforge.com
+modrinth.com
+planetminecraft.com
+namemc.com
+mcmod.cn
+mcbbs.net
+minebbs.com
+klpbbs.com
+huijiwiki.com
+fandom.com
+# 代码与文档
+github.com
+gitee.com
+gitlab.com
+stackoverflow.com
+wikipedia.org
+# 网盘（分享存档、材质包）
+pan.baidu.com
+aliyundrive.com

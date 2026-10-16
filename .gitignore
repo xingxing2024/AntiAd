@@ -1,0 +1,15 @@
+# 构建产物
+target/
+
+# 运行时数据（记录库与自动备份）
+*.db
+*.db-journal
+config.yml.bak-*
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
