@@ -106,6 +106,15 @@
 - 运行时依赖：SQLite 驱动 [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)（org.xerial，Apache-2.0）**不打进 jar**，由插件自带的 Paper 加载器 `AntiAdLoader` 在首次启动时从**阿里云公共仓库**下载（官方源只作兜底），详见 [安装](wiki/安装与升级.md)。
 - 内置数据：`tlds.txt` 取自已公开的 IANA 根区后缀（另做了筛选），`trusted-domains.txt` 为自行整理。
 
+## 许可证
+
+本项目以 **GNU General Public License v3.0（GPL-3.0）** 发布，完整条文见 [`LICENSE`](LICENSE)（jar 内也附带了一份）。
+
+- 你可以自由使用、修改、再分发，但**修改后分发必须同样以 GPL-3.0 开源**，不能拿去闭源改成自己的插件。
+- 分发时请保留版权声明和许可证副本。
+- 依赖：bStats（MIT）、sqlite-jdbc（Apache-2.0），都与 GPL-3.0 兼容；SQLite 驱动由服务端按需下载，不随本插件分发。
+- 商用/二次开发遇到疑问，欢迎在 [Issues](https://github.com/xingxing2024/AntiAd/issues) 里问。
+
 ## 记录
 
 命中记录写入 SQLite：`plugins/AntiAd/antiad.db`，包含时间、玩家、IP、类型（广告 / AI / 违禁词 / 封禁）、命中内容与整条消息。重启后 60 秒窗口内的累计次数从这里恢复，不会因重启清零；保留 `storage.keep-days` 天（默认 30，0 = 永久）。
@@ -137,7 +146,7 @@
 ## 安装
 
 1. 服务器 Java **21 或更新**（1.21.x 服务端用 Java 21，26.x 用 Java 25 —— 插件按 Java 21 编译，两边都能跑）。
-2. 把 `target/AntiAd-1.0.9.jar`（约 110 KB）放进 `plugins`。
+2. 把 `target/AntiAd-1.0.10.jar`（约 110 KB）放进 `plugins`。
 3. 首次启动会自动从**阿里云镜像**下载 SQLite 驱动到服务端根目录的 `libraries/org/xerial/sqlite-jdbc/`（想换源：启动参数 `-Dorg.bukkit.plugin.java.LibraryLoader.centralURL=<仓库>`；**无外网**就手动下 `https://maven.aliyun.com/repository/public/org/xerial/sqlite-jdbc/3.51.0.0/sqlite-jdbc-3.51.0.0.jar` 放进那个目录）。
 4. 启动一次后编辑 `plugins/AntiAd/config.yml`（把 `whitelist.domains` / `whitelist.ips` 改成自己服务器的域名、入口 IP、自己的 QQ 群号，`punish.contact` 改成你的解封联系方式，要用 AI 再填 `ai.api-key`），然后 `/antiad reload`。
 
