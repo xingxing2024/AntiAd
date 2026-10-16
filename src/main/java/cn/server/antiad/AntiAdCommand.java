@@ -20,12 +20,25 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class AntiAdCommand implements CommandExecutor, TabCompleter {
     private static final List<String> SUBS = List.of("check", "ban", "unban", "behavior", "ai", "cost", "records", "test", "reload", "help");
+    /** 子命令短写：左边的简写映射到右边的规范名（`/antiad c 玩家` = `/antiad check 玩家`）。 */
+    private static final Map<String, String> ALIASES = Map.ofEntries(
+            Map.entry("c", "check"), Map.entry("info", "check"),
+            Map.entry("b", "ban"),
+            Map.entry("ub", "unban"), Map.entry("pardon", "unban"),
+            Map.entry("bh", "behavior"),
+            Map.entry("a", "ai"),
+            Map.entry("co", "cost"),
+            Map.entry("r", "records"), Map.entry("rec", "records"), Map.entry("logs", "records"),
+            Map.entry("t", "test"),
+            Map.entry("rl", "reload"),
+            Map.entry("h", "help"), Map.entry("?", "help"));
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
     private final AntiAdPlugin plugin;
@@ -34,12 +47,18 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
         this.plugin = plugin;
     }
 
+    /** 把短写换成规范子命令名；不是短写就原样返回（小写）。 */
+    static String canonical(String input) {
+        String value = input.toLowerCase(Locale.ROOT);
+        return ALIASES.getOrDefault(value, value);
+    }
+
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("antiad.admin")) {
             sender.sendMessage(Messages.text("&c你没有权限使用该命令。"));
             return true;
         }
-        switch (args.length == 0 ? "help" : args[0].toLowerCase(Locale.ROOT)) {
+        switch (args.length == 0 ? "help" : canonical(args[0])) {
             case "reload" -> {
                 plugin.reload();
                 sender.sendMessage(Messages.text("&aAntiAd 配置已重载（记录库换文件、AI 并发数需要重启）。"));
@@ -53,7 +72,7 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
             case "cost" -> cost(sender);
             case "records" -> records(sender, args);
             default -> {
-                sender.sendMessage(Messages.text("&6AntiAd &7命令："));
+                sender.sendMessage(Messages.text("&6AntiAd &7命令（&f/ad&7 或 &f/antiad&7，短写见最后一行）："));
                 sender.sendMessage(Messages.text("&e/antiad check <玩家> &7- 查看该玩家是否在检查范围内"));
                 sender.sendMessage(Messages.text("&e/antiad ban <玩家> [时长 30s/10m/2h/7d] [理由…] &7- 手动封禁 IP 与账号"));
                 sender.sendMessage(Messages.text("&e/antiad unban <玩家> &7- 解封该玩家及其最近记录的 IP"));
@@ -63,6 +82,7 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(Messages.text("&e/antiad records [玩家] &7- 查看最近 10 条命中记录"));
                 sender.sendMessage(Messages.text("&e/antiad test <文本> &7- 只试跑规则检测，不处理，可验证误伤"));
                 sender.sendMessage(Messages.text("&e/antiad reload &7- 重载配置"));
+                sender.sendMessage(Messages.text("&7短写：&fc&7=check &fb&7=ban &fub&7=unban &fbh&7=behavior &fa&7=ai &fco&7=cost &fr&7=records &ft&7=test &frl&7=reload"));
             }
         }
         return true;
@@ -453,7 +473,7 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
             String prefix = args[0].toLowerCase(Locale.ROOT);
             return SUBS.stream().filter(value -> value.startsWith(prefix)).toList();
         }
-        if (args.length == 2 && List.of("check", "records", "ban", "unban").contains(args[0].toLowerCase(Locale.ROOT))) {
+        if (args.length == 2 && List.of("check", "records", "ban", "unban").contains(canonical(args[0]))) {
             String prefix = args[1].toLowerCase(Locale.ROOT);
             return Bukkit.getOnlinePlayers().stream().map(Player::getName)
                     .filter(value -> value.toLowerCase(Locale.ROOT).startsWith(prefix)).toList();

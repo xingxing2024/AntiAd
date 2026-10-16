@@ -145,6 +145,7 @@ SQLite `plugins/AntiAd/antiad.db`：
 | `/antiad records [玩家]` | 最近 10 条命中记录（含原文与 AI 理由） |
 | `/antiad test <文本>` | 只试跑规则（归一化、地址命中、敏感词命中、是否会被预筛送 AI），不处理、不记录、不调 AI |
 | `/antiad reload` | 重载配置（`ai.max-concurrent` 需重启） |
+| 短写（全部子命令） | 根命令可写 `/ad`；`c`=check、`b`=ban、`ub`=unban、`bh`=behavior、`a`=ai、`co`=cost、`r`=records、`t`=test、`rl`=reload、`h`/`?`=help |
 
 权限：`antiad.admin`（命令，默认 OP）、`antiad.notify`（接收通报，默认 OP）、`antiad.bypass`（跳过检查，默认 OP）。
 
@@ -154,7 +155,7 @@ SQLite `plugins/AntiAd/antiad.db`：
 - 线程模型：聊天事件是异步的，处理器只读内存缓存（老玩家判定所需的在线时长/违规次数每分钟在玩家线程上刷新）；所有对玩家的动作（补发消息、踢出、封禁、通报）都通过 `EntityScheduler` 在该玩家所属区域线程执行；SQLite 写入用同步方法保护。
 - 同时兼容装了 **TrChat** 这类接管聊天的插件（实测 A/B：旧实现会被 TrChat 绕过，新实现 0 次广播）。
 - 记录库需要写 `plugins/AntiAd/`；AI 需要出网（本地 Ollama 可离线）。
-- 无 Vault、无 PlaceholderAPI、无 ProtocolLib 依赖；jar 本体约 **110 KB**（只 shade 了 bStats，已重定位到 `cn.server.antiad.bstats`，不会和其他插件冲突）。SQLite 驱动由插件自带的 Paper 加载器 `AntiAdLoader` 拉取：**优先阿里云公共仓库**，官方源兜底，下载到 `libraries/org/xerial/sqlite-jdbc/`（无外网时手动放进去，或改 `-Dorg.bukkit.plugin.java.LibraryLoader.centralURL`）。
+- 无 Vault、无 PlaceholderAPI、无 ProtocolLib 依赖；jar 本体约 **130 KB**（只 shade 了 bStats，已重定位到 `cn.server.antiad.bstats`，不会和其他插件冲突）。SQLite 驱动由插件自带的 Paper 加载器 `AntiAdLoader` 拉取：**优先阿里云公共仓库**，官方源兜底，下载到 `libraries/org/xerial/sqlite-jdbc/`（无外网时手动放进去，或改 `-Dorg.bukkit.plugin.java.LibraryLoader.centralURL`）。
 - 匿名统计：bStats 插件 ID `34706`，只上报版本/服务端/Java/在线人数/地区这类信息，不含玩家名、IP、聊天内容；可在 `plugins/bStats/config.yml` 里 `enabled: false` 全局关闭。
 
 ## 10. 已知限制与未做项
@@ -169,7 +170,7 @@ SQLite `plugins/AntiAd/antiad.db`：
 
 ## 11. 验证情况
 
-- 54 个单元测试：检测规则、归一化、误伤用例、数字 IP、内置后缀、受信任平台、跨消息拼接（含连锁误伤回归）、结构调整、行为打分/分类/阈值、SQLite 三类表读写（含重启恢复）、地址情报探测（对着本机假 MC 服务器验协议、对着假 HTTP 服务器验标题抓取、缓存与私网拦截）、AI 客户端（本地假接口验证请求体/解析/超时/fail-open）。
+- 61 个单元测试：检测规则、归一化、误伤用例、数字 IP、内置后缀、受信任平台、跨消息拼接（含连锁误伤回归）、结构调整、行为打分/分类/阈值、SQLite 三类表读写（含重启恢复）、地址情报探测（对着本机假 MC 服务器验协议、对着假 HTTP 服务器验标题抓取、缓存与私网拦截）、命令短写映射、AI 客户端（本地假接口验证请求体/解析/超时/fail-open）。
 - 真机（Java 25 + Purpur 26.3，另加 TrChat 2.5.2 与 fakeplayer 0.4.5 做对照）：
   - 影子隐藏穿透 TrChat：旧版 3 次广播、新版 0 次（A/B 对照）。
   - 新玩家挖 53 格 → 行为分 21 → 观望，落库后 `/antiad behavior` 可见；老玩家 0 统计。

@@ -16,8 +16,8 @@ libraries:
 commands:
   antiad:
     description: 反广告插件管理命令
-    usage: /antiad reload|test <文本>
-    aliases: [adban]
+    usage: /antiad reload|test <文本>（也有 /ad 与短写 c/b/ub/bh/a/co/r/t/rl）
+    aliases: [adban, ad]
 permissions:
   antiad.admin:
     description: 使用 /antiad 管理命令
