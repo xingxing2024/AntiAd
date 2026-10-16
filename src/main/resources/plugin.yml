@@ -5,6 +5,10 @@ api-version: '${bukkit.api.version}'
 folia-supported: true
 description: 广告与违规内容管制（行为分类 + 结构规则 + 可选 AI），支持 Folia 区域化调度
 author: ServerTools
+# SQLite 驱动不打进 jar（否则要带上 23 个平台的原生库，12MB），改由服务端首次启动时自动下载到服务端根目录的 libraries/。
+# 服务器无外网时：手动把 sqlite-jdbc-<版本>.jar 放到 libraries/org/xerial/sqlite-jdbc/<版本>/ 下即可。
+libraries:
+  - org.xerial:sqlite-jdbc:3.51.0.0
 commands:
   antiad:
     description: 反广告插件管理命令
