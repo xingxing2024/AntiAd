@@ -15,6 +15,8 @@ public final class Detector {
     private static final Pattern HIDDEN = Pattern.compile("\\p{Cf}");
     private static final Pattern COLLAPSE = Pattern.compile("[ \\t]+");
     private static final Pattern BRACKET_DOT = Pattern.compile("(?i)[\\[【（(<{]\\s*(?:dot|点)\\s*[\\]】）)>}]");
+    /** 方括号里夹着的字面点：xxx[.]com、(.)、{.}、【.】、<.> 这类写法也还原成“.”。 */
+    private static final Pattern BRACKET_LITERAL_DOT = Pattern.compile("[\\[【（(<{]\\s*[.。．｡·・•﹒、]\\s*[\\]】）)>}]");
     private static final Pattern DOT = Pattern.compile("(?i)\\s*(?:dot|点|[.。．｡·・•﹒、])\\s*");
     private static final Pattern DIGIT_SPACE = Pattern.compile("(?<=\\d)\\s+(?=\\d)");
     private static final Pattern LETTER_SPACE = Pattern.compile("(?<=\\b[a-z0-9])\\s+(?=[a-z0-9]\\b)");
@@ -33,6 +35,7 @@ public final class Detector {
         text = Normalizer.normalize(text, Normalizer.Form.NFKC).toLowerCase(Locale.ROOT);
         text = COLLAPSE.matcher(text).replaceAll(" ");
         text = BRACKET_DOT.matcher(text).replaceAll(".");
+        text = BRACKET_LITERAL_DOT.matcher(text).replaceAll(".");
         text = DOT.matcher(text).replaceAll(".");
         text = DIGIT_SPACE.matcher(text).replaceAll("");
         text = LETTER_SPACE.matcher(text).replaceAll("");
@@ -152,6 +155,22 @@ public final class Detector {
             }
         }
         return new ArrayList<>(hits);
+    }
+
+    /**
+     * 整个域名黑名单（blocked-domains）：命中它的任何子域名（www.、mc.、play. 等）都算，返回命中的写法，没有返回 null。
+     * 不要求后缀在 tlds 表里（品牌后缀、zip 这类文件扩展名后缀照拦）；与白名单冲突时以白名单为准。
+     */
+    public static String blocked(String raw, Settings s) {
+        if (s.blockedDomains == null || s.blockedDomains.isEmpty()) return null;
+        String text = normalize(raw);
+        Matcher domain = DOMAIN.matcher(text);
+        while (domain.find()) {
+            String host = domain.group();
+            if (endsWithAny(host, s.allowedDomains)) continue;
+            if (endsWithAny(host, s.blockedDomains)) return host;
+        }
+        return null;
     }
 
     /** 十进制整数形式的 IP：3107365173 → 185.54.161.53。不是合法 IPv4 或形如日期时返回 null。 */

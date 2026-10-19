@@ -62,6 +62,32 @@ class DetectorTest {
         assertEquals(List.of("9.9.9.9"), find("9.9§#ff0000.9.§#ff00009"));   // §#RRGGBB 十六进制颜色也去掉
     }
 
+    @Test void 方括号点写法也认得() {
+        assertEquals(List.of("mc.example.net"), find("来玩 mc[.]example[.]net 等你"));
+        assertEquals(List.of("mc.example.net"), find("来玩 mc(.)example(.)net 等你"));
+        assertEquals(List.of("mc.example.net"), find("来玩 mc{.}example{.}net 等你"));
+        assertEquals(List.of("mc.example.net"), find("来玩 mc【.】example【.】net 等你"));
+        assertEquals(List.of("mc.example.net"), find("来玩 mc<.>example<.>net 等你"));
+        assertEquals(List.of("mc.example.net"), find("来玩 mc[ . ]example[. ]net 等你"));
+        assertTrue(Detector.looksLikeAddress("mc[.]example[.]net"));   // 归一化后也要能被 AI 预筛看到
+    }
+
+    @Test void 整个域名黑名单命中任何子域() {
+        Settings s = settings();
+        s.blockedDomains = Set.of("xemc.ren", "fan.zip");
+        assertEquals("www.xemc.ren", Detector.blocked("来玩 www.xemc.ren 送VIP", s));
+        assertEquals("mc.xemc.ren", Detector.blocked("mc.xemc.ren", s));
+        assertEquals("xemc.ren", Detector.blocked("官网 xemc[.]ren", s));       // 躲避写法还原后照样命中
+        assertEquals("xx.play.xemc.ren", Detector.blocked("看看 xx.play.xemc.ren", s));
+        assertEquals("fan.zip", Detector.blocked("下载 fan.zip", s));           // 不受后缀表限制
+        assertNull(Detector.blocked("玩玩 notxemc.ren", s));                    // 点边界：不误伤包含关系
+        assertNull(Detector.blocked("xemc.ren.evil.com", s));                  // 只是别人的子域，不算
+        assertNull(Detector.blocked("日常聊天内容", s));
+        assertTrue(Detector.find("下载 fan.zip", s).isEmpty(), "后缀表里没有 zip → 普通规则不命中");
+        s.allowedDomains.add("xemc.ren");
+        assertNull(Detector.blocked("mc.xemc.ren", s), "进白名单的域名黑名单不生效（白名单优先）");
+    }
+
     @Test void 白名单内的自己服务器地址不命中() {
         assertEquals(List.of(), find("本服地址 play.example.com 或 1.2.3.4"));
         assertEquals(List.of(), find("子域名 mc.yourserver.cn 也可以"));

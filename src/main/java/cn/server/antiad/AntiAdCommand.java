@@ -103,16 +103,19 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
         Settings settings = plugin.settings();
         String text = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
         List<String> hits = Detector.find(text, settings);
+        String blocked = Detector.blocked(text, settings);
         String word = Detector.matchedWord(text, settings.bannedWords);
         boolean ai = settings.aiEnabled && !settings.aiKey.isBlank();
         sender.sendMessage(Messages.text("&7归一化：&f" + Detector.normalize(text)));
+        if (blocked != null) sender.sendMessage(Messages.text("&c命中黑名单域名：&f" + blocked
+                + "&7（整个域名拉黑：隐藏 + 通报 + 立即封禁 IP 与账号）"));
         if (!hits.isEmpty()) sender.sendMessage(Messages.text("&c广告命中：" + String.join("、", hits)
                 + "&7（累计 &f" + settings.hits + "&7 次 / &f" + settings.windowSeconds + "&7 秒封禁 IP 与账号）"));
         if (word != null) sender.sendMessage(Messages.text(ai
                 ? "&e命中敏感词：&f" + word + "&7（作为线索送 AI，由 AI 判断是不是广告）"
                 : "&c命中敏感词：&f" + word + "&7（AI 未启用：直接只给本人可见）"));
-        if (hits.isEmpty() && word == null) sender.sendMessage(Messages.text(aiGate(text, settings)));
-        probeTest(sender, text, hits, settings);
+        if (hits.isEmpty() && word == null && blocked == null) sender.sendMessage(Messages.text(aiGate(text, settings)));
+        if (blocked == null) probeTest(sender, text, hits, settings);
     }
 
     /** `/antiad test` 的地址情报：异步探测命中的地址到底是不是真的 MC 服务器，结论回来再补一条消息。 */
@@ -521,6 +524,7 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
                 case "sign" -> "&e告示牌";
                 case "anvil" -> "&e铁砧";
                 case "book" -> "&e书";
+                case "blocked" -> "&c黑名单";
                 default -> "&c封禁";
             };
             String action = switch (hit.action() == null ? "" : hit.action()) {

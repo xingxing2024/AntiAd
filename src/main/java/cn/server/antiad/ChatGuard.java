@@ -72,13 +72,14 @@ public final class ChatGuard implements Listener {
         // AI 通过后重放的那一条：交给聊天插件按它自己的格式广播，这里不再处理，避免死循环。
         if (isRefire(player, text)) return;
 
-        String match = adMatch(player, text);
+        String blocked = blockedMatch(player, text);
+        String match = blocked != null ? blocked : adMatch(player, text);
         String word = match == null ? wordMatch(player, text) : null;
         boolean ai = aiWanted(player);
         if (match != null || (word != null && !ai)) {
             shadow(event, player);
             InetAddress address = address(player);
-            String kind = match != null ? "ad" : "word";
+            String kind = blocked != null ? "blocked" : match != null ? "ad" : "word";
             plugin.runFor(player, () -> handle(player, text, match, word, address, kind));
             return;
         }
@@ -154,14 +155,15 @@ public final class ChatGuard implements Listener {
         String root = body.split(" +", 2)[0].toLowerCase(Locale.ROOT);
         if (!settings.checkedCommands.contains(root)) return;
         Player player = event.getPlayer();
-        String match = adMatch(player, body);
+        String blocked = blockedMatch(player, body);
+        String match = blocked != null ? blocked : adMatch(player, body);
         if (match == null) return;
         // /me 这类广播命令没法只让发送者看见，直接拦下。
         // 先取消再取 IP：取不到 IP（正在掉线）时也不能让广告漏出去。
         event.setCancelled(true);
         InetAddress address = address(player);
         if (address == null) return;
-        handle(player, body, match, null, address, "ad");
+        handle(player, body, match, null, address, blocked != null ? "blocked" : "ad");
     }
 
     /** 告示牌：新玩家把地址写在牌子上，同样拦下。 */
@@ -207,10 +209,11 @@ public final class ChatGuard implements Listener {
     private void checkEntry(Player player, String text, String kind, Runnable block) {
         Settings settings = plugin.settings();
         if (text.isBlank() || !watched(plugin, player)) return;
-        List<String> hits = Detector.find(text, settings);
-        if (hits.isEmpty()) return;
+        String blocked = blockedMatch(player, text);
+        List<String> hits = blocked != null ? List.of() : Detector.find(text, settings);
+        if (blocked == null && hits.isEmpty()) return;
         block.run();
-        handle(player, text, hits.get(0), null, address(player), kind);
+        handle(player, text, blocked != null ? blocked : hits.get(0), null, address(player), blocked != null ? "blocked" : kind);
     }
 
     /** 主线程执行：AI 说不是广告就照原样放行，是广告就只回给发送者并按命中处理。 */
@@ -258,6 +261,12 @@ public final class ChatGuard implements Listener {
         if (!watched(plugin, player)) return null;
         List<String> hits = Detector.find(text, plugin.settings());
         return hits.isEmpty() ? null : hits.get(0);
+    }
+
+    /** 整个域名黑名单命中：管理员确认过的域名，命中即按广告处理（不等累计、不探测）。 */
+    private String blockedMatch(Player player, String text) {
+        if (!watched(plugin, player)) return null;
+        return Detector.blocked(text, plugin.settings());
     }
 
     /** 敏感词命中：返回命中的词（AI 开启时只是线索，由 AI 决定）。 */
@@ -357,6 +366,11 @@ public final class ChatGuard implements Listener {
             plugin.notifyStaff("&e" + player.getName() + " &7的消息含违禁词（&f" + word + "&7），已仅本人可见：&f" + text);
             return;
         }
+        // 整个域名黑名单（管理员确认过的广告域名）：不探测、不等累计，直接按广告处理。
+        if ("blocked".equals(kind)) {
+            finish(player, address, text, match, ip, kind, Probe.Result.NONE, true);
+            return;
+        }
         // 扣分在 finish 里按结论给：确认是服务器 = 广告命中扣分，没确认 = 只按轻度扣分。
         // AI 判定为广告的走语义结论（AI 已经看过探测结论），不再等探测；规则命中的地址才需要确认。
         if ("ai".equals(kind) || !settings.probeEnabled || !settings.probeConfirmRequired) {
@@ -406,14 +420,16 @@ public final class ChatGuard implements Listener {
                     + "&7：只隐藏、不计入封禁次数。");
             return;
         }
+        boolean blocked = "blocked".equals(kind);
         plugin.behavior().penalty(player, true);
         plugin.behavior().countViolation(player);
         int threshold = plugin.behavior().threshold(player);
         int count = strikes.hit(player.getUniqueId(), System.currentTimeMillis(), settings.windowSeconds);
         plugin.record(player, ip, kind, match, text, "hidden");
         if (result.probed()) plugin.notifyStaff("&7地址情报（&f" + match + "&7）：&f" + result.text());
-        plugin.notifyStaff("&e" + player.getName() + " &7对话命中广告（&f" + match + "&7，" + count + "/" + threshold + "），已仅本人可见");
-        if (count < threshold || address == null) return;
+        if (blocked) plugin.notifyStaff("&e" + player.getName() + " &7的消息命中黑名单域名（&f" + match + "&7）：直接按广告处理");
+        else plugin.notifyStaff("&e" + player.getName() + " &7对话命中广告（&f" + match + "&7，" + count + "/" + threshold + "），已仅本人可见");
+        if (address == null || (!blocked && count < threshold)) return;
         strikes.clear(player.getUniqueId());
         plugin.behavior().markBanned(player);
         plugin.record(player, ip, "ban", match, text, "banned");

@@ -24,7 +24,7 @@ public final class Settings {
     public long banSeconds;
     public String banReason, kickMessage, notifyPermission, bypassPermission, contact, banCommand, unbanCommand;
     public String aiUrl, aiKey, aiModel, aiPrompt;
-    public Set<String> checkedCommands, allowedDomains, allowedIps, allowedPlayers, tlds, bannedWords, selfDomains, aiTriggerWords;
+    public Set<String> checkedCommands, allowedDomains, allowedIps, allowedPlayers, blockedDomains, tlds, bannedWords, selfDomains, aiTriggerWords;
 
     /** 打包的 tlds.txt / trusted-domains.txt 读不到时的兜底。 */
     private static final Set<String> FALLBACK_TLDS = Set.of("com", "cn", "net", "org", "ren", "top", "xyz", "icu", "vip", "shop", "me", "cc", "gg");
@@ -125,6 +125,8 @@ public final class Settings {
         s.allowedDomains = new HashSet<>(s.selfDomains);
         s.allowedDomains.addAll(TRUSTED_DOMAINS);
         s.allowedIps = new HashSet<>(c.getStringList("whitelist.ips"));
+        // 整个域名黑名单：确认过的广告域名，命中它的任何子域名都直接按广告处理（不等累计、不探测）。
+        s.blockedDomains = lowerSet(c.getStringList("blocked-domains"));
         // 玩家白名单：名字（不分大小写）或 UUID（带不带横线都行），名单里的人完全免检。
         s.allowedPlayers = playerSet(c.getStringList("whitelist.players"));
         // tlds 不写 = 内置的服务器常用后缀；写空列表 = 不检测域名，只检测 IP。
