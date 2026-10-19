@@ -157,9 +157,28 @@ public final class Detector {
         return new ArrayList<>(hits);
     }
 
+    /** 域名家族：play.uuu.cc、plac.uuu.cc 都归到 uuu.cc；复合后缀（uuu.com.cn）取三段。换前缀绕过靠它避免。 */
+    static String domainFamily(String host) {
+        String[] parts = host.split("\\.");
+        if (parts.length <= 2) return host;
+        String last2 = parts[parts.length - 2] + '.' + parts[parts.length - 1];
+        if (COMPOUND_TLDS.contains(last2)) return parts[parts.length - 3] + '.' + last2;
+        return last2;
+    }
+
+    /** 二级后缀（复合后缀）：这些组合要当成一个顶级后缀看（uuu.com.cn 的域名是 uuu.com.cn，不是 com.cn）。 */
+    private static final Set<String> COMPOUND_TLDS = Set.of(
+            "com.cn", "net.cn", "org.cn", "gov.cn", "edu.cn", "ac.cn",
+            "com.hk", "com.tw", "com.mo", "com.sg", "com.my", "com.ph", "com.vn",
+            "co.th", "co.id", "co.jp", "ne.jp", "or.jp", "co.kr", "co.in", "co.il",
+            "co.uk", "org.uk", "ac.uk", "gov.uk", "co.nz", "co.za",
+            "com.au", "net.au", "org.au", "com.br", "com.ar", "com.mx",
+            "com.tr", "com.sa", "com.eg", "com.ng", "com.pk",
+            "com.ru", "com.ua", "com.pl", "com.ro", "com.gr", "com.pt", "com.es");
+
     /**
-     * 整个域名黑名单（blocked-domains）：命中它的任何子域名（www.、mc.、play. 等）都算，返回命中的写法，没有返回 null。
-     * 不要求后缀在 tlds 表里（品牌后缀、zip 这类文件扩展名后缀照拦）；与白名单冲突时以白名单为准。
+     * 整个域名黑名单（blocked-domains）：按「域名家族」比对 —— 写 play.uuu.cc 或 uuu.cc 都算同一个域名，
+     * 换任意前缀（plac./mc2./…）都命中。不要求后缀在 tlds 表里（品牌后缀、zip 这类照拦）；与白名单冲突时以白名单为准。
      */
     public static String blocked(String raw, Settings s) {
         if (s.blockedDomains == null || s.blockedDomains.isEmpty()) return null;
@@ -168,7 +187,10 @@ public final class Detector {
         while (domain.find()) {
             String host = domain.group();
             if (endsWithAny(host, s.allowedDomains)) continue;
-            if (endsWithAny(host, s.blockedDomains)) return host;
+            String family = domainFamily(host);
+            for (String entry : s.blockedDomains) {
+                if (family.equals(domainFamily(entry))) return host;
+            }
         }
         return null;
     }

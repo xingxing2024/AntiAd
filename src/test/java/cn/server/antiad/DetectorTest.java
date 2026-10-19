@@ -88,6 +88,19 @@ class DetectorTest {
         assertNull(Detector.blocked("mc.xemc.ren", s), "进白名单的域名黑名单不生效（白名单优先）");
     }
 
+    @Test void 黑名单按整个域名家族匹配_换任意前缀也认得() {
+        Settings s = settings();
+        s.blockedDomains = Set.of("play.uuu.cc", "mc.play.uuu.com.cn");
+        assertEquals("uuu.cc", Detector.domainFamily("play.uuu.cc"));
+        assertEquals("uuu.com.cn", Detector.domainFamily("mc.play.uuu.com.cn"));            // 复合后缀取三段
+        assertEquals("plac.uuu.cc", Detector.blocked("我的服 plac.uuu.cc 进服送VIP", s));    // 换前缀照样命中
+        assertEquals("uuu.cc", Detector.blocked("uuu.cc", s));
+        assertEquals("a.b.uuu.cc", Detector.blocked("进 a.b.uuu.cc 玩", s));
+        assertEquals("plac.uuu.com.cn", Detector.blocked("plac.uuu.com.cn", s));
+        assertNull(Detector.blocked("other.com.cn 的内容", s), "同后缀的其它域名不受影响");
+        assertNull(Detector.blocked("notuuu.cc 路过", s));
+    }
+
     @Test void 白名单内的自己服务器地址不命中() {
         assertEquals(List.of(), find("本服地址 play.example.com 或 1.2.3.4"));
         assertEquals(List.of(), find("子域名 mc.yourserver.cn 也可以"));

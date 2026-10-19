@@ -107,8 +107,12 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
         String word = Detector.matchedWord(text, settings.bannedWords);
         boolean ai = settings.aiEnabled && !settings.aiKey.isBlank();
         sender.sendMessage(Messages.text("&7归一化：&f" + Detector.normalize(text)));
-        if (blocked != null) sender.sendMessage(Messages.text("&c命中黑名单域名：&f" + blocked
-                + "&7（整个域名拉黑：隐藏 + 通报 + 立即封禁 IP 与账号）"));
+        if (blocked != null) {
+            String family = Detector.domainFamily(blocked);
+            String tail = family.equals(blocked) ? "" : "（整个域名 &f" + family + "&7）";
+            sender.sendMessage(Messages.text("&c命中黑名单域名：&f" + blocked + "&7" + tail
+                    + "：隐藏 + 通报 + 立即封禁 IP 与账号"));
+        }
         if (!hits.isEmpty()) sender.sendMessage(Messages.text("&c广告命中：" + String.join("、", hits)
                 + "&7（累计 &f" + settings.hits + "&7 次 / &f" + settings.windowSeconds + "&7 秒封禁 IP 与账号）"));
         if (word != null) sender.sendMessage(Messages.text(ai
