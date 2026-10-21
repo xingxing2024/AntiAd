@@ -204,11 +204,11 @@ public final class Store implements AutoCloseable {
         }
     }
 
-    /** 窗口内的广告命中时间，用来在重启后恢复累计次数（action=soft 的没探测确认，不算）。 */
+    /** 窗口内的广告命中时间，用来在重启后恢复累计次数（action=soft/released 的没确认成广告，不算）。 */
     public synchronized Map<UUID, List<Long>> adHits(long since) {
         Map<UUID, List<Long>> result = new HashMap<>();
         try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT uuid, hit FROM hits WHERE kind IN ('ad', 'ai') AND action <> 'soft' AND hit >= ? ORDER BY hit")) {
+                "SELECT uuid, hit FROM hits WHERE kind IN ('ad', 'ai') AND action NOT IN ('soft', 'released') AND hit >= ? ORDER BY hit")) {
             statement.setLong(1, since);
             try (ResultSet rows = statement.executeQuery()) {
                 while (rows.next()) {
@@ -257,10 +257,10 @@ public final class Store implements AutoCloseable {
         return new int[]{0, 0};
     }
 
-    /** 某个玩家近一段时间内的违规命中次数（结构类只是形状、不算内容违规；没探测确认过的地址命中也不算）。 */
+    /** 某个玩家近一段时间内的违规命中次数（结构类只是形状、不算内容违规；没探测确认过/已放行的地址命中也不算）。 */
     public synchronized int violations(UUID player, long since) {
         try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT COUNT(*) FROM hits WHERE uuid = ? AND hit >= ? AND action <> 'soft'"
+                "SELECT COUNT(*) FROM hits WHERE uuid = ? AND hit >= ? AND action NOT IN ('soft', 'released')"
                         + " AND kind IN ('ad', 'ai', 'word', 'combine', 'sign', 'anvil', 'book', 'ban')")) {
             statement.setString(1, player.toString());
             statement.setLong(2, since);

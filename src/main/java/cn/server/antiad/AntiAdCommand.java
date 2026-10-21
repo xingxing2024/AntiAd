@@ -145,7 +145,7 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
                 String line = result.probed()
                         ? "&7地址情报（&f" + host + "&7）：&f" + result.text()
                         : "&7地址情报（&f" + host + "&7）：&8没有结论（域名解析不了、内网地址或探测失败）";
-                String message = line + (hard ? " &7→ &c会计入封禁次数" : " &7→ &a只隐藏、不计入封禁次数（不会累计到封号）");
+                String message = line + (hard ? " &7→ &c会计入封禁次数" : " &7→ &a放行（不是 MC 服务器，聊天照常发出；不计入封禁次数）");
                 plugin.runGlobal(() -> sender.sendMessage(Messages.text(message)));
             }
         });
@@ -533,6 +533,7 @@ public final class AntiAdCommand implements CommandExecutor, TabCompleter {
             };
             String action = switch (hit.action() == null ? "" : hit.action()) {
                 case "banned" -> "&c已封禁";
+                case "released" -> "&a已放行&8（不是 MC 服务器）";
                 case "soft" -> "&7只隐藏&8（没探测到服务器）";
                 default -> "&7已隐藏";
             };

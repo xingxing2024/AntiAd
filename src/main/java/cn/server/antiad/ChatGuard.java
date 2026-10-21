@@ -76,11 +76,18 @@ public final class ChatGuard implements Listener {
         String match = blocked != null ? blocked : adMatch(player, text);
         String word = match == null ? wordMatch(player, text) : null;
         boolean ai = aiWanted(player);
-        if (match != null || (word != null && !ai)) {
+        if (match != null) {
+            // 地址命中先扣住消息：探测确认是 MC 服务器才只给本人看；只是普通网站/域名不存在就放行。
+            Hold hold = hold(event);
+            InetAddress address = address(player);
+            String kind = blocked != null ? "blocked" : "ad";
+            plugin.runFor(player, () -> handle(player, text, match, null, address, kind, hold));
+            return;
+        }
+        if (word != null && !ai) {
             shadow(event, player);
             InetAddress address = address(player);
-            String kind = blocked != null ? "blocked" : match != null ? "ad" : "word";
-            plugin.runFor(player, () -> handle(player, text, match, word, address, kind));
+            plugin.runFor(player, () -> handle(player, text, null, word, address, "word", null));
             return;
         }
         // 老玩家（免检）到此结束：不检查、不扣分、也不受行为分类影响。
@@ -90,9 +97,9 @@ public final class ChatGuard implements Listener {
         // 跨消息拼接：把最近几条拼起来再查一次地址，对付把域名拆成多条发。端口可能在前一条里，所以把拼条后的整段当文本。
         String combined = combineHit(history, text, settings);
         if (combined != null) {
-            shadow(event, player);
+            Hold hold = hold(event);
             InetAddress address = address(player);
-            plugin.runFor(player, () -> handle(player, combined, combined, null, address, "combine"));
+            plugin.runFor(player, () -> handle(player, combined, combined, null, address, "combine", hold));
             return;
         }
 
@@ -118,8 +125,7 @@ public final class ChatGuard implements Listener {
         if (!suspicious && word == null && (!Detector.hasLetters(text) || !Detector.suspicious(text, settings.aiTriggerWords))) return;
 
         List<String> hints = Detector.hints(text, settings.bannedWords, settings.aiTriggerWords);
-        Hold hold = new Hold(player, event.renderer(), new LinkedHashSet<>(event.viewers()), event.message());
-        event.setCancelled(true);
+        Hold hold = hold(event);
         try {
             plugin.aiPool().submit(() -> {
                 aiJudge(player, text, hints, history, hold);
@@ -163,7 +169,7 @@ public final class ChatGuard implements Listener {
         event.setCancelled(true);
         InetAddress address = address(player);
         if (address == null) return;
-        handle(player, body, match, null, address, blocked != null ? "blocked" : "ad");
+        handle(player, body, match, null, address, blocked != null ? "blocked" : "ad", null);
     }
 
     /** 告示牌：新玩家把地址写在牌子上，同样拦下。 */
@@ -213,7 +219,7 @@ public final class ChatGuard implements Listener {
         List<String> hits = blocked != null ? List.of() : Detector.find(text, settings);
         if (blocked == null && hits.isEmpty()) return;
         block.run();
-        handle(player, text, blocked != null ? blocked : hits.get(0), null, address(player), blocked != null ? "blocked" : kind);
+        handle(player, text, blocked != null ? blocked : hits.get(0), null, address(player), blocked != null ? "blocked" : kind, null);
     }
 
     /** 主线程执行：AI 说不是广告就照原样放行，是广告就只回给发送者并按命中处理。 */
@@ -221,19 +227,25 @@ public final class ChatGuard implements Listener {
         Player player = hold.player();
         if (!player.isOnline()) return;
         if (!verdict.ad()) {
-            if (plugin.settings().aiRefire) {
-                // 让聊天插件（TrChat 这类）重新广播这条，保留它的前缀/格式。
-                // 用重新合成事件的方式，不用 player.chat()：后者在本核心上不触发 AsyncChatEvent。
-                plugin.runAsync(() -> refire(player, hold, text));
-                return;
-            }
-            for (Audience viewer : hold.viewers()) {
-                viewer.sendMessage(hold.renderer().render(player, player.displayName(), hold.message(), viewer));
-            }
+            deliverAll(hold, text);
             return;
         }
         player.sendMessage(hold.renderer().render(player, player.displayName(), hold.message(), player));
-        handle(player, text, "AI：" + verdict.reason(), null, address(player), "ai");
+        handle(player, text, "AI：" + verdict.reason(), null, address(player), "ai", null);
+    }
+
+    /** 把扣下的消息按原样放行给所有观众；装了聊天插件就交给它重新广播，保留它的前缀和频道。 */
+    private void deliverAll(Hold hold, String text) {
+        Player player = hold.player();
+        if (!player.isOnline()) return;
+        if (plugin.settings().aiRefire) {
+            // 用重新合成事件的方式，不用 player.chat()：后者在本核心上不触发 AsyncChatEvent。
+            plugin.runAsync(() -> refire(player, hold, text));
+            return;
+        }
+        for (Audience viewer : hold.viewers()) {
+            viewer.sendMessage(hold.renderer().render(player, player.displayName(), hold.message(), viewer));
+        }
     }
 
     /** 重新合成一次聊天事件（异步事件只能在异步线程触发），交给聊天插件按它的格式广播。 */
@@ -249,10 +261,16 @@ public final class ChatGuard implements Listener {
         }
     }
 
-    /** 取消事件（同时拦住 TrChat 这类 HIGHEST 优先级的格式化插件），再把内容只补发给发送者。 */
-    private void shadow(AsyncChatEvent event, Player player) {
-        Hold hold = new Hold(player, event.renderer(), Set.of(), event.message());
+    /** 扣住消息：取消事件（同时拦住 TrChat 这类 HIGHEST 优先级的格式化插件），等结论出来再决定放行还是只给本人看。 */
+    private Hold hold(AsyncChatEvent event) {
+        Hold hold = new Hold(event.getPlayer(), event.renderer(), new LinkedHashSet<>(event.viewers()), event.message());
         event.setCancelled(true);
+        return hold;
+    }
+
+    /** 取消事件，再把内容只补发给发送者。 */
+    private void shadow(AsyncChatEvent event, Player player) {
+        Hold hold = hold(event);
         plugin.runFor(player, () -> player.sendMessage(hold.renderer().render(player, player.displayName(), hold.message(), player)));
     }
 
@@ -356,7 +374,7 @@ public final class ChatGuard implements Listener {
     }
 
     /** 主线程执行：写记录、通报管理员。规则命中的地址要等一次探测确认 —— 确认是活的 MC 服务器才计入封禁次数（防止随手打一个不存在的网址被累计封号）。 */
-    private void handle(Player player, String text, String match, String word, InetAddress address, String kind) {
+    private void handle(Player player, String text, String match, String word, InetAddress address, String kind, Hold hold) {
         Settings settings = plugin.settings();
         String ip = address == null ? null : address.getHostAddress();
         if (word != null) {
@@ -368,25 +386,25 @@ public final class ChatGuard implements Listener {
         }
         // 整个域名黑名单（管理员确认过的广告域名）：不探测、不等累计，直接按广告处理。
         if ("blocked".equals(kind)) {
-            finish(player, address, text, match, ip, kind, Probe.Result.NONE, true);
+            finish(player, address, text, match, ip, kind, Probe.Result.NONE, true, hold);
             return;
         }
-        // 扣分在 finish 里按结论给：确认是服务器 = 广告命中扣分，没确认 = 只按轻度扣分。
+        // 扣分在 finish 里按结论给：确认是服务器 = 广告命中扣分，没确认 = 放行（聊天）/轻度扣分（告示牌等入口）。
         // AI 判定为广告的走语义结论（AI 已经看过探测结论），不再等探测；规则命中的地址才需要确认。
         if ("ai".equals(kind) || !settings.probeEnabled || !settings.probeConfirmRequired) {
-            finish(player, address, text, match, ip, kind, Probe.Result.NONE, true);
+            finish(player, address, text, match, ip, kind, Probe.Result.NONE, true, hold);
             return;
         }
         String host = Probe.hostOf(match);
         if (host == null) {
-            finish(player, address, text, match, ip, kind, Probe.Result.NONE, true);
+            finish(player, address, text, match, ip, kind, Probe.Result.NONE, true, hold);
             return;
         }
         int port = Probe.portOf(Detector.normalize(text), host);
         plugin.runAsync(() -> {
             Probe.Result result = probes.lookup(host, port, settings);
             boolean hard = hardHit(settings, result);
-            finishSafely(player, address, text, match, ip, kind, result, hard);
+            finishSafely(player, address, text, match, ip, kind, result, hard, hold);
         });
     }
 
@@ -394,9 +412,9 @@ public final class ChatGuard implements Listener {
      * 探测回来后才决定处置，这几秒里玩家可能已经掉线：掉线时不能再往实体线程上排任务
      * （会抛异常，这次命中也就白记了 —— 等于给了"发完立刻退"绕过计数的路子），改到全局线程做。
      */
-    private void finishSafely(Player player, InetAddress address, String text, String match, String ip, String kind, Probe.Result result, boolean hard) {
-        if (player.isOnline()) plugin.runFor(player, () -> finish(player, address, text, match, ip, kind, result, hard));
-        else plugin.runGlobal(() -> finish(player, address, text, match, ip, kind, result, hard));
+    private void finishSafely(Player player, InetAddress address, String text, String match, String ip, String kind, Probe.Result result, boolean hard, Hold hold) {
+        if (player.isOnline()) plugin.runFor(player, () -> finish(player, address, text, match, ip, kind, result, hard, hold));
+        else plugin.runGlobal(() -> finish(player, address, text, match, ip, kind, result, hard, hold));
     }
 
     /**
@@ -408,18 +426,27 @@ public final class ChatGuard implements Listener {
         return result.minecraft() || result.portOpen();
     }
 
-    /** 探测回来了：确认过的计入封禁次数并可能封禁；没确认的只隐藏 + 通报 + 扣分（仍然是"只给本人看"）。 */
-    private void finish(Player player, InetAddress address, String text, String match, String ip, String kind, Probe.Result result, boolean hard) {
+    /** 探测回来了：确认过的计入封禁次数并可能封禁；没确认的普通网站，聊天消息直接放行，告示牌等入口只隐藏。 */
+    private void finish(Player player, InetAddress address, String text, String match, String ip, String kind, Probe.Result result, boolean hard, Hold hold) {
         Settings settings = plugin.settings();
         if (!hard) {
+            String detail = result.probed() ? "（&f" + result.text() + "&7）" : "（域名解析不了或探测超时）";
+            if (hold != null) {
+                // 普通网页链接不该被藏起来：探测确认不是 MC 服务器就照原样放行，不扣分、不计数。
+                deliverAll(hold, text);
+                plugin.record(player, ip, kind, match, text, "released");
+                plugin.notifyStaff("&e" + player.getName() + " &7消息里的地址（&f" + match + "&7）不是 MC 服务器" + detail + "&7，已放行。");
+                return;
+            }
             // action=soft：记录库里把这类命中从"封禁次数"和"老玩家判定"里排除掉，但管理员仍然查得到。
             plugin.behavior().penalty(player, false);
             plugin.record(player, ip, kind, match, text, "soft");
-            plugin.notifyStaff("&e" + player.getName() + " &7消息里有地址（&f" + match + "&7），但探测不到活的 MC 服务器"
-                    + (result.probed() ? "（&f" + result.text() + "&7）" : "（域名解析不了或探测超时）")
+            plugin.notifyStaff("&e" + player.getName() + " &7消息里有地址（&f" + match + "&7），但探测不到活的 MC 服务器" + detail
                     + "&7：只隐藏、不计入封禁次数。");
             return;
         }
+        // 扣住的消息现在只回给发送者本人（广告内容不外传）。
+        if (hold != null) player.sendMessage(hold.renderer().render(player, player.displayName(), hold.message(), player));
         boolean blocked = "blocked".equals(kind);
         plugin.behavior().penalty(player, true);
         plugin.behavior().countViolation(player);

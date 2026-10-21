@@ -93,6 +93,18 @@ class StoreTest {
         }
     }
 
+    @Test void 放行的地址命中不计入封禁次数() throws Exception {
+        UUID player = UUID.randomUUID();
+        try (Store store = open()) {
+            store.record(1000L, player, "Steve", "1.2.3.4", "ad", "example.com", "看 example.com", "released");
+            store.record(2000L, player, "Steve", "1.2.3.4", "ad", "a.com", "a.com", "soft");
+            store.record(3000L, player, "Steve", "1.2.3.4", "ad", "b.com", "b.com", "hidden");
+            assertEquals(1, store.adHits(0L).get(player).size());
+            assertEquals(1, store.violations(player, 0L));
+            assertEquals(3, store.recent(null, 10).size());   // 记录还在，管理员查得到
+        }
+    }
+
     @Test void 重启后累计次数能恢复() throws Exception {
         Path file = dir.resolve("antiad.db");
         UUID player = UUID.randomUUID();
