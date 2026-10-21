@@ -240,7 +240,8 @@ ai:
   # AI 判定通过后怎么放行这条消息：
   #   false（默认）= 由 AntiAd 按原版格式补发给原观众，任何服务器都能用，但没有聊天插件的前缀/颜色。
   #   true        = 重新合成一次聊天事件，让聊天插件（TrChat 这类）按它自己的格式广播；
-  #                 要求服务器确实装了这类插件，否则这条消息没人广播（会丢）。
+  #   ⚠ 装了 TrChat 这类聊天插件必须设 true，否则通过 AI 审核的消息不会经过聊天插件（没有它的格式/频道记录）；
+  #     没装聊天插件时设 true 会丢消息（没人广播）。
   refire-approved: false
   # 也可以换成任意 OpenAI 兼容接口：
   #   本地 Ollama（完全免费、离线）：url 'http://127.0.0.1:11434/v1/chat/completions'  model 'qwen2.5:7b'  api-key 'ollama'

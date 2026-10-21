@@ -101,7 +101,7 @@ Paper / Purpur / Folia 1.21.1 ~ 26.x（一份 jar，Java 21+；实测 Java 21 + 
 
 - OpenAI 兼容 `chat/completions`；配置里给了 GLM-4-Flash（免费）、DeepSeek、硅基流动、OpenRouter 免费模型、本地 Ollama 的现成写法。
 - **只审规则没命中的消息**，且只审新玩家窗口内的人；有预筛（`trigger-words` + 链接样式）来省额度。
-- 判定期间**先把消息扣住**（发送者也先看不到），通过后按原样放行（`refire-approved: true` 时交给聊天插件重新广播以保留前缀格式），判定为广告则只回给发送者并按命中累计。
+- 判定期间**先把消息扣住**（发送者也先看不到），通过后按原样放行（`refire-approved: true` 时交给聊天插件重新广播以保留前缀格式；**装了 TrChat 这类接管聊天的插件必须开 true**，否则通过检测的消息不经过它），判定为广告则只回给发送者并按命中累计。
 - 提示词可改，占位符：`{self}` 本服地址、`{minutes}`、`{hits}`、`{words}` 命中的敏感词线索、`{context}` 最近发言、`{message}`；模型需回 `{"ad":true/false,"reason":"..."}`。
 - 速度与容错：默认 2 秒超时、独立线程池（`max-concurrent`）、超时/限流/报错按 `fail-open` 放行，不卡聊天。
 - **每次判定都写后台日志**（含"不是广告"）：`AI 审核 <玩家>：是广告/不是广告（理由…；耗时…；tokens…；线索…）消息：…`。
